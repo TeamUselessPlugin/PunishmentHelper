@@ -1,7 +1,7 @@
 package io.github.teamuselessplugin.punishment.commands
 
 import dev.jorel.commandapi.CommandAPICommand
-import dev.jorel.commandapi.arguments.OfflinePlayerArgument
+import dev.jorel.commandapi.arguments.ListArgumentBuilder
 import dev.jorel.commandapi.executors.PlayerCommandExecutor
 import io.github.monun.invfx.openFrame
 import io.github.teamuselessplugin.punishment.events.BlockEvents
@@ -14,19 +14,40 @@ import org.bukkit.Sound
 
 class Punishment {
     fun register() {
+//        val offlinePlayers = GreedyStringArgument("players").replaceSuggestions(ArgumentSuggestions.stringsAsync {
+//            return@stringsAsync CompletableFuture.supplyAsync {
+//                var players: Array<String?> = arrayOfNulls(0)
+//
+//                Bukkit.getScheduler().scheduleSyncDelayedTask(Main.instance!!) {
+//                    players = Bukkit.getOfflinePlayers().map { it.name }.toTypedArray()
+//                }
+//
+//                while (players.isNotEmpty()) {
+//                    Thread.sleep(10)
+//                }
+//
+//                return@supplyAsync players
+//            }
+//        })
+
+        val offlinePlayers = ListArgumentBuilder<OfflinePlayer>("offline_players")
+            .withList(Bukkit.getOfflinePlayers().map { it }.toList())
+            .withMapper { it.name }.buildGreedy()
+
         CommandAPICommand("punishment")
             .withAliases("처벌")
             .withPermission("punishment.gui")
-            .withArguments(OfflinePlayerArgument("player"))
+            // TODO 여러명 선택 가능하게 하기
+            .withArguments(offlinePlayers)
             .executesPlayer(PlayerCommandExecutor { sender, args ->
-                val player = args[0] as OfflinePlayer
-                if (sender.uniqueId != player.uniqueId) {
-                    if (player.isOnline && !player.player?.hasPermission("punishment.bypass")!!) {
-                        PunishmentGUI().main(sender, player.uniqueId)?.let { sender.openFrame(it) }
-                    } else if (player.isOnline && player.player?.hasPermission("punishment.bypass")!!) {
+                @Suppress("UNCHECKED_CAST") val player = args[0] as List<OfflinePlayer>
+                if (!player.contains(sender)) {
+                    if (!player.map { it.isOnline }.contains(false) && !player.map { it.player?.hasPermission("punishment.bypass")!! }.contains(true)) {
+                        PunishmentGUI().main(sender, player.map { it.uniqueId })?.let { sender.openFrame(it) }
+                    } else if (!player.map { it.isOnline }.contains(false) && player.map { it.player?.hasPermission("punishment.bypass")!! }.contains(true)) {
                         sender.sendMessage("해당 플레이어에 대한 처벌 GUI를 활성화 할 수 없습니다.")
                     } else {
-                        PunishmentGUI().main(sender, player.uniqueId)?.let { sender.openFrame(it) }
+                        PunishmentGUI().main(sender, player.map { it.uniqueId })?.let { sender.openFrame(it) }
                     }
                 } else {
                     sender.sendMessage("자기 자신에게는 처벌 GUI를 활성화 할 수 없습니다.")
@@ -50,7 +71,7 @@ class Punishment {
                     BlockEvents.oldLoc.remove(sender.uniqueId)
                     BlockEvents.oldGameMode.remove(sender.uniqueId)
                     BlockEvents.trackingPlayer.remove(sender.uniqueId)
-                    sender.openFrame(PunishmentGUI().main(sender, playerOffline.uniqueId)!!)
+                    sender.openFrame(PunishmentGUI().main(sender, listOf(playerOffline.uniqueId))!!)
                 } else {
                     sender.sendMessage("추적 중이 아닙니다.")
                 }
