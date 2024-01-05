@@ -23,7 +23,7 @@ templates:
       lore:
         - "&7핵을 사용했습니다."
       glowing: false
-      Reason: "&c핵"
+    Reason: "&c핵"
   SPAM:
     ItemStack:
       Material: "BOOK"
