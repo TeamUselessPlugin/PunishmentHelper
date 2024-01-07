@@ -14,21 +14,6 @@ import org.bukkit.Sound
 
 class Punishment {
     fun register() {
-//        val offlinePlayers = GreedyStringArgument("players").replaceSuggestions(ArgumentSuggestions.stringsAsync {
-//            return@stringsAsync CompletableFuture.supplyAsync {
-//                var players: Array<String?> = arrayOfNulls(0)
-//
-//                Bukkit.getScheduler().scheduleSyncDelayedTask(Main.instance!!) {
-//                    players = Bukkit.getOfflinePlayers().map { it.name }.toTypedArray()
-//                }
-//
-//                while (players.isNotEmpty()) {
-//                    Thread.sleep(10)
-//                }
-//
-//                return@supplyAsync players
-//            }
-//        })
 
         val offlinePlayers = ListArgumentBuilder<OfflinePlayer>("offline_players")
             .withList(Bukkit.getOfflinePlayers().map { it }.toList())

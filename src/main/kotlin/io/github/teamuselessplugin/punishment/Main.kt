@@ -1,10 +1,5 @@
 package io.github.teamuselessplugin.punishment
 
-import com.comphenix.protocol.PacketType
-import com.comphenix.protocol.ProtocolLibrary
-import com.comphenix.protocol.events.ListenerPriority
-import com.comphenix.protocol.events.PacketAdapter
-import com.comphenix.protocol.events.PacketEvent
 import dev.jorel.commandapi.CommandAPI
 import dev.jorel.commandapi.CommandAPIBukkitConfig
 import io.github.kill00.configapi.cfg
