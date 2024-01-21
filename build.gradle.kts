@@ -34,6 +34,7 @@ dependencies {
     compileOnly("io.github.monun", "heartbeat-coroutines", "0.0.5") // Heartbeat Coroutine : GPL-3.0 License
     compileOnly("io.github.monun", "invfx-api", "3.3.2") // InvFX API : GPL-3.0 License
     compileOnly("com.comphenix.protocol", "ProtocolLib", "5.2.0-20231209.220838-1") // ProtocolLib : GPL-2.0 License
+    compileOnly("io.github.classgraph", "classgraph", "4.8.165") // ClassGraph : MIT License
 
     implementation(fileTree(mapOf("dir" to "libs/implementation", "include" to listOf("*.jar")))) // Load all jars in libs folder (Local Libraries)
 }
