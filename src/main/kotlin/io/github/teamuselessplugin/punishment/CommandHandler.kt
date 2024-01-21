@@ -2,9 +2,9 @@ package io.github.teamuselessplugin.punishment
 
 import io.github.classgraph.ClassGraph
 import io.github.classgraph.ScanResult
-import io.github.teamuselessplugin.punishment.interfaces.Command
+import io.github.teamuselessplugin.punishment.`interface`.Command
 
-class CommandHandler {
+internal class CommandHandler {
     @Suppress("UnstableApiUsage")
     companion object {
         val scanResult: ScanResult = ClassGraph()

@@ -1,4 +1,4 @@
-package io.github.teamuselessplugin.punishment.events
+package io.github.teamuselessplugin.punishment.event
 
 import io.github.monun.heartbeat.coroutines.HeartbeatScope
 import io.github.teamuselessplugin.punishment.packet.GlowPlayer
@@ -12,7 +12,7 @@ import org.bukkit.event.Listener
 import org.bukkit.event.player.PlayerInteractEvent
 import java.util.*
 
-class StickFinderEvent : Listener {
+internal class StickFinderEvent : Listener {
     companion object {
         val seeker: HashMap<UUID, Boolean> = HashMap()
         val target: HashMap<UUID, Player> = HashMap()

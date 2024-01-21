@@ -1,10 +1,10 @@
-package io.github.teamuselessplugin.punishment.events
+package io.github.teamuselessplugin.punishment.event
 
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
 import org.bukkit.event.player.PlayerQuitEvent
 
-class Events : Listener {
+internal class Events : Listener {
     @EventHandler
     fun logout(e: PlayerQuitEvent) {
         if (StickFinderEvent.seeker[e.player.uniqueId] == true) {

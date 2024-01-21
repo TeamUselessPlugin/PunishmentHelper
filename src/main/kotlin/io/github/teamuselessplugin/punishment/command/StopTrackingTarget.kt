@@ -1,16 +1,16 @@
-package io.github.teamuselessplugin.punishment.commands
+package io.github.teamuselessplugin.punishment.command
 
 import dev.jorel.commandapi.CommandAPICommand
 import dev.jorel.commandapi.executors.PlayerCommandExecutor
 import io.github.monun.invfx.openFrame
-import io.github.teamuselessplugin.punishment.events.BlockEvents
-import io.github.teamuselessplugin.punishment.interfaces.Command
+import io.github.teamuselessplugin.punishment.event.BlockEvents
+import io.github.teamuselessplugin.punishment.`interface`.Command
 import io.github.teamuselessplugin.punishment.invfx.PunishmentGUI
 import net.kyori.adventure.text.Component
 import org.bukkit.Bukkit
 import org.bukkit.Sound
 
-class StopTrackingTarget : Command {
+internal class StopTrackingTarget : Command {
     override val commandName: String
         get() = "punishment-tracking-end"
 

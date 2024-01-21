@@ -1,17 +1,17 @@
-package io.github.teamuselessplugin.punishment.commands
+package io.github.teamuselessplugin.punishment.command
 
 import dev.jorel.commandapi.CommandAPICommand
 import dev.jorel.commandapi.arguments.ListArgumentBuilder
 import dev.jorel.commandapi.executors.PlayerCommandExecutor
 import io.github.monun.invfx.openFrame
-import io.github.teamuselessplugin.punishment.interfaces.Command
+import io.github.teamuselessplugin.punishment.`interface`.Command
 import io.github.teamuselessplugin.punishment.invfx.PunishmentGUI
 import org.bukkit.Bukkit
 import org.bukkit.OfflinePlayer
 import java.util.function.Supplier
 
 
-class Punishment : Command {
+internal class Punishment : Command {
     override val commandName: String
         get() = "punishment"
 
