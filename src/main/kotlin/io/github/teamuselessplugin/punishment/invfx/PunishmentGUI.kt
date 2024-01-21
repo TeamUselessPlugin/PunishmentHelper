@@ -35,7 +35,7 @@ class PunishmentGUI {
     }
     fun main(sender: Player, targetUUID: List<UUID>): InvFrame? {
         val targetPlayer: List<OfflinePlayer> = targetUUID.map { Bukkit.getOfflinePlayer(it) }
-        val isValid: List<Boolean> = targetPlayer.map { it.hasPlayedBefore() }
+        val isValid: List<Boolean> = targetPlayer.map { it.hasPlayedBefore() || it.isOnline }
         val isOnline: List<Boolean> = targetPlayer.map { it.isOnline }
         val targetPlayerOnline: List<Player?> = targetPlayer.map { if (it.isOnline) it.player else null }
 

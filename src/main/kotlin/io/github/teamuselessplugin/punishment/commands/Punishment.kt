@@ -8,21 +8,34 @@ import io.github.teamuselessplugin.punishment.interfaces.Command
 import io.github.teamuselessplugin.punishment.invfx.PunishmentGUI
 import org.bukkit.Bukkit
 import org.bukkit.OfflinePlayer
+import java.util.function.Supplier
 
 
 class Punishment : Command {
-    override fun push() {
-        val offlinePlayers = ListArgumentBuilder<OfflinePlayer>("offline_players")
-            .withList(Bukkit.getOfflinePlayers().map { it }.toList())
-            .withMapper { it.name }.buildGreedy()
+    override val commandName: String
+        get() = "punishment"
 
-        CommandAPICommand("punishment")
+    @Suppress("UNCHECKED_CAST")
+    override fun push() {
+
+        CommandAPICommand(commandName)
             .withAliases("처벌")
             .withPermission("punishment.gui")
-            // TODO 여러명 선택 가능하게 하기
-            .withArguments(offlinePlayers)
+            .withArguments(ListArgumentBuilder<String>("offline_players")
+                .withList(Supplier {
+                    mutableListOf<String>().apply {
+                        Bukkit.getOnlinePlayers().forEach { add(it.name) }
+                        Bukkit.getOfflinePlayers().forEach { if (!contains(it.name)) add(it.name.toString()) }
+                    }
+                })
+                .withMapper { it }.buildGreedy())
             .executesPlayer(PlayerCommandExecutor { sender, args ->
-                @Suppress("UNCHECKED_CAST") val player = args[0] as List<OfflinePlayer>
+                val player = mutableListOf<OfflinePlayer>().apply {
+                    (args[0] as List<String>).forEach { name ->
+                        add(Bukkit.getOfflinePlayer(name))
+                    }
+                }
+
                 if (!player.contains(sender)) {
                     if (!player.map { it.isOnline }.contains(false) && !player.map { it.player?.hasPermission("punishment.bypass")!! }.contains(true)) {
                         PunishmentGUI().main(sender, player.map { it.uniqueId })?.let { sender.openFrame(it) }

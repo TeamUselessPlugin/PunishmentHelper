@@ -11,8 +11,11 @@ import org.bukkit.Bukkit
 import org.bukkit.Sound
 
 class StopTrackingTarget : Command {
+    override val commandName: String
+        get() = "punishment-tracking-end"
+
     override fun push() {
-        CommandAPICommand("punishment-tracking-end")
+        CommandAPICommand(commandName)
             .withAliases("추적종료")
             .withPermission("punishment.gui")
             .executesPlayer(PlayerCommandExecutor { sender, _ ->
