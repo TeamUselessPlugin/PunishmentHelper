@@ -1,12 +1,21 @@
 package io.github.teamuselessplugin.punishment
 
-class CommandHandler {
-    fun register() {
-        val commands = listOf(
-            io.github.teamuselessplugin.punishment.commands.Punishment(),
-            io.github.teamuselessplugin.punishment.commands.StopTrackingPlayer()
-        )
+import io.github.classgraph.ClassGraph
+import io.github.teamuselessplugin.punishment.interfaces.Command
 
-        commands.forEach { it.push() }
+class CommandHandler {
+    @Suppress("UnstableApiUsage")
+    fun register() {
+        val scanResult = ClassGraph()
+            .acceptPackages(Main.instance!!.pluginMeta.mainClass.substringBeforeLast('.'))
+            .enableClassInfo()
+            .scan()
+
+        scanResult
+            .getClassesImplementing(Command::class.qualifiedName)
+            .forEach {
+                val command = it.loadClass(Command::class.java).getDeclaredConstructor().newInstance()
+                command.push()
+            }
     }
 }

@@ -13,6 +13,7 @@ libraries:
   - dev.jorel:commandapi-bukkit-shade:9.3.0
   - io.github.monun:invfx-core:3.3.2
   - io.github.monun:heartbeat-coroutines:0.0.5
+  - io.github.classgraph:classgraph:4.8.165
 
 permissions:
   punishment.gui:
