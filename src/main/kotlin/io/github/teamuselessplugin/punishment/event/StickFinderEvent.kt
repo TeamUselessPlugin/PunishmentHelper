@@ -28,12 +28,16 @@ internal class StickFinderEvent : Listener {
 
             if (e.player.isSneaking && e.action.isRightClick && e.item?.type == Material.STICK) {
                 if (seeker[e.player.uniqueId] == true) {
+                    // 플레이어 추적 비활성화
                     seeker[e.player.uniqueId] = false
                     e.player.playSound(e.player.location, org.bukkit.Sound.BLOCK_NOTE_BLOCK_PLING, 1f, 2f)
+
                     e.player.sendMessage("§c플레이어 추적기가 비활성화 되었습니다.")
                 } else {
+                    // 플레이어 추적 활성화
                     seeker[e.player.uniqueId] = true
                     e.player.playSound(e.player.location, org.bukkit.Sound.BLOCK_NOTE_BLOCK_PLING, 1f, 2f)
+
                     if (coroutineEnabled[e.player.uniqueId] == null || !coroutineEnabled[e.player.uniqueId]!!) {
                         HeartbeatScope().launch {
                             coroutineEnabled[e.player.uniqueId] = true
@@ -67,6 +71,9 @@ internal class StickFinderEvent : Listener {
                                     } else {
                                         glow.hide()
                                     }
+                                } else {
+                                    glow.hide()
+                                    target.remove(e.player.uniqueId)
                                 }
                                 delay(50L)
                             }
