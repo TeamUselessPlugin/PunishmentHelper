@@ -43,7 +43,7 @@ internal class MultiplePlayers {
 
                     itemMeta = itemMeta.apply {
                         displayName(
-                            Component.text("다중 플레이어 선택됨")
+                            Component.text("여러 플레이어 선택됨")
                                 .color(TextColor.color(Color.WHITE.asRGB()))
                         )
 
