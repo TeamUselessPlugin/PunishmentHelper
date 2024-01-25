@@ -22,7 +22,7 @@ internal class BlockEvents : Listener {
     companion object {
         val tracking: HashMap<UUID, Boolean> = HashMap()
         val trackingPlayer: HashMap<UUID, UUID> = HashMap()
-        val oldLoc: HashMap<UUID, Location> = HashMap()
+        val oldLocation: HashMap<UUID, Location> = HashMap()
         val oldGameMode: HashMap<UUID, GameMode> = HashMap()
 
         val blocker: HashMap<UUID, Boolean> = HashMap()

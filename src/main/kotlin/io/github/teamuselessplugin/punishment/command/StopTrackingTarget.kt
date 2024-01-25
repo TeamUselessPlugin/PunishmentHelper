@@ -25,11 +25,11 @@ internal class StopTrackingTarget : Command {
                     BlockEvents.tracking[sender.uniqueId] = false
                     sender.sendMessage(Component.text("§a${playerOffline.name}님에 대한 추적이 해제되었습니다."))
 
-                    sender.teleport(BlockEvents.oldLoc[sender.uniqueId]!!)
+                    sender.teleport(BlockEvents.oldLocation[sender.uniqueId]!!)
                     sender.gameMode = BlockEvents.oldGameMode[sender.uniqueId]!!
                     sender.playSound(sender.location, Sound.BLOCK_NOTE_BLOCK_PLING, 1f, 2f)
 
-                    BlockEvents.oldLoc.remove(sender.uniqueId)
+                    BlockEvents.oldLocation.remove(sender.uniqueId)
                     BlockEvents.oldGameMode.remove(sender.uniqueId)
                     BlockEvents.trackingPlayer.remove(sender.uniqueId)
                     sender.openFrame(PunishmentGUI().main(sender, listOf(playerOffline.uniqueId))!!)

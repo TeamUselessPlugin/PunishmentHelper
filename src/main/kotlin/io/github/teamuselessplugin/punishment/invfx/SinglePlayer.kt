@@ -153,12 +153,12 @@ internal class SinglePlayer {
                                     .hoverEvent(HoverEvent.showText(Component.text("§7클릭하여 추적을 종료합니다."))))
                                 .append(Component.text("§a를 입력하세요.")))
 
-                            BlockEvents.oldLoc[sender.uniqueId] = sender.location
+                            BlockEvents.oldLocation[sender.uniqueId] = sender.location
                             BlockEvents.oldGameMode[sender.uniqueId] = sender.gameMode
                             BlockEvents.trackingPlayer[sender.uniqueId] = targetPlayer.uniqueId
 
                             sender.gameMode = GameMode.SPECTATOR
-                            sender.spectatorTarget = targetPlayerOnline
+                            sender.teleport(targetPlayerOnline?.location ?: sender.location)
                             sender.playSound(sender.location, Sound.BLOCK_NOTE_BLOCK_PLING, 1f, 2f)
                             sender.closeInventory()
 
