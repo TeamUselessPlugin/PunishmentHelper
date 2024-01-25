@@ -13,13 +13,29 @@ import org.bukkit.inventory.ItemFlag
 import org.bukkit.inventory.ItemStack
 import java.util.*
 
+@Suppress("UNCHECKED_CAST")
 internal class MultiplePlayers {
-    fun vanilla(sender: Player, targetPlayer: List<OfflinePlayer>): InvFrame {
+    fun vanilla(sender: Player): InvFrame {
+        val targetPlayer: List<OfflinePlayer> = (PunishmentGUI.data[sender.uniqueId] as List<Any>)[0] as List<OfflinePlayer>
         val isOnline: List<Boolean> = targetPlayer.map { it.isOnline }
         val targetUUID: List<UUID> = targetPlayer.map { it.uniqueId }
 
         return frame(4, Component.text("Punishment GUI")) {
             val isBanned = targetPlayer.map { it.isBanned }
+
+            // Next
+            slot(8, 0) {
+                item = ItemStack(Material.ARROW).apply {
+                    itemMeta = itemMeta.apply {
+                        displayName(Component.text("§c다음"))
+                        lore(listOf(Component.text("§7다음 페이지로 넘어갑니다.")))
+                    }
+                }
+
+                onClick {
+                    sender.openFrame(SinglePlayer().vanilla(sender))
+                }
+            }
 
             // Player Head
             slot(4, 0) {
@@ -32,15 +48,14 @@ internal class MultiplePlayers {
                         )
 
                         val l: MutableList<Component> = mutableListOf()
-                        l.add(Component.text("§c플레이어를 여러명 입력한 경우 어드민 유틸 기능을 사용할 수 없습니다."))
                         l.add(Component.text(""))
                         targetPlayer.forEachIndexed { index, it ->
-                            if (!isBanned.contains(true) && isOnline.contains(true)) {
+                            if (!isBanned[index] && isOnline[index]) {
                                 l.add(
                                     Component.text("${it.name} [${it.uniqueId}]")
                                         .color(TextColor.color(Color.WHITE.asRGB()))
                                 )
-                            } else if (isBanned.contains(true)) {
+                            } else if (isBanned[index]) {
                                 l.add(
                                     Component.text("${it.name} [${it.uniqueId}]")
                                         .decorate(TextDecoration.STRIKETHROUGH)
@@ -119,16 +134,30 @@ internal class MultiplePlayers {
                 }
 
                 onClick {
+                    val worlds = Bukkit.getWorlds()
+                    val currentFeedback = worlds.map { world -> world.getGameRuleValue(GameRule.SEND_COMMAND_FEEDBACK) }
+                    worlds.forEach { world -> world.setGameRule(GameRule.SEND_COMMAND_FEEDBACK, false) }
                     targetPlayer.forEach {
                         if (it.isBanned) {
                             sender.performCommand("minecraft:pardon ${it.name}")
                         }
                     }
+                    worlds.forEachIndexed { index, world -> world.setGameRule(GameRule.SEND_COMMAND_FEEDBACK, currentFeedback[index]!!) }
+
                     sender.playSound(sender.location, Sound.BLOCK_NOTE_BLOCK_PLING, 1f, 2f)
                     sender.sendMessage(Component.text("§a선택한 플레이어들의 차단이 해제되었습니다."))
                     sender.closeInventory()
                 }
             }
+        }
+    }
+
+    fun liteBans(sender: Player): InvFrame {
+        val targetPlayer: List<OfflinePlayer> = (PunishmentGUI.data[sender.uniqueId] as List<Any>)[0] as List<OfflinePlayer>
+        val collection: List<Any> = (PunishmentGUI.data[sender.uniqueId] as List<Any>)[1] as List<Any>
+
+        return frame(1, Component.text("Hello")) {
+            println(collection)
         }
     }
 }

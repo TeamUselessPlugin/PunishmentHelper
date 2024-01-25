@@ -4,6 +4,7 @@ import io.github.monun.invfx.InvFX.frame
 import io.github.monun.invfx.frame.InvFrame
 import io.github.monun.invfx.openFrame
 import io.github.teamuselessplugin.punishment.Main
+import litebans.api.Database
 import net.kyori.adventure.text.Component
 import org.bukkit.*
 import org.bukkit.enchantments.Enchantment
@@ -11,8 +12,13 @@ import org.bukkit.entity.Player
 import org.bukkit.inventory.ItemFlag
 import org.bukkit.inventory.ItemStack
 import java.util.*
+import java.util.concurrent.CompletableFuture
+import kotlin.collections.HashMap
 
 internal class PunishmentGUI {
+    companion object {
+        var data = HashMap<UUID, Any>()
+    }
     val errorByServer = Component.text("§c데이터를 가져올 수 없습니다. 관리자에게 문의해주세요.")
     val errorByPlayer = Component.text("§c플레이어 데이터를 가져올 수 없습니다.")
     val errorIsOfflinePlayer = Component.text("§c오프라인 플레이어입니다.")
@@ -29,25 +35,192 @@ internal class PunishmentGUI {
         if (!isValid.contains(false)) {
             try {
                 var a: InvFrame? = null
-                if (targetPlayers.size > 1) {
-                    // 플레이어가 여러명일 경우
-                    if (Main.liteBans_enable) {
-                        // LiteBans가 활성화 되어있을 경우
-                        // TODO 다시 만들기
-                    } else {
-                        // LiteBans가 비활성화 되어있을 경우
-                        a = MultiplePlayers().vanilla(sender, targetPlayers)
+                var liteBansDataCollection: List<Any>? = null // isBanned, isMuted, bannedCount, kickedCount, mutedCount, warnedCount, latestPunishmentData
+                if (Main.liteBans_enable) {
+                    // LiteBans가 활성화 되어있을 경우
+                    val latestPunishmentData: HashMap<UUID, List<Any>> = HashMap() // date, reason, type, endTime, isActive, punishedBy(UUID)
+
+                    CompletableFuture.runAsync {
+                        val db = Database.get()
+                        val isBanned = targetPlayers.map { db.isPlayerBanned(it.uniqueId, null) }
+                        val isMuted = targetPlayers.map { db.isPlayerMuted(it.uniqueId, null) }
+                        val bannedCount = targetPlayers.map {
+                            var count: Long
+                            db.prepareStatement("SELECT COUNT(*) FROM {bans} WHERE uuid=?").apply {
+                                setString(1, it.uniqueId.toString())
+                            }.use { statement ->
+                                statement.executeQuery().use { resultSet ->
+                                    count = if (resultSet.next()) {
+                                        resultSet.getLong(1)
+                                    } else {
+                                        0
+                                    }
+                                }
+                                statement.close()
+                            }
+
+                            if (count > 0) {
+                                db.prepareStatement("SELECT * FROM {bans} WHERE uuid=? ORDER BY id DESC LIMIT 1").apply {
+                                    setString(1, it.uniqueId.toString())
+                                }.use { statement ->
+                                    statement.executeQuery().use { resultSet ->
+                                        if (resultSet.next()) {
+                                            if (latestPunishmentData[it.uniqueId] == null || (latestPunishmentData[it.uniqueId]!![0] as Long) < resultSet.getLong("time")) {
+                                                latestPunishmentData[it.uniqueId] = listOf(
+                                                    resultSet.getLong("time"),
+                                                    resultSet.getString("reason"),
+                                                    "차단",
+                                                    resultSet.getLong("until"),
+                                                    resultSet.getBoolean("active"),
+                                                    resultSet.getString("banned_by_uuid")
+                                                )
+                                            }
+                                        }
+                                    }
+                                    statement.close()
+                                }
+                            }
+                            count
+                        }
+                        val kickedCount = targetPlayers.map {
+                            var count: Long
+                            db.prepareStatement("SELECT COUNT(*) FROM {kicks} WHERE uuid=?").apply {
+                                setString(1, it.uniqueId.toString())
+                            }.use { statement ->
+                                statement.executeQuery().use { resultSet ->
+                                    count = if (resultSet.next()) {
+                                        resultSet.getLong(1)
+                                    } else {
+                                        0
+                                    }
+                                }
+                                statement.close()
+                            }
+
+                            if (count > 0) {
+                                db.prepareStatement("SELECT * FROM {kicks} WHERE uuid=? ORDER BY id DESC LIMIT 1").apply {
+                                    setString(1, it.uniqueId.toString())
+                                }.use { statement ->
+                                    statement.executeQuery().use { resultSet ->
+                                        if (resultSet.next()) {
+                                            if (latestPunishmentData[it.uniqueId] == null || (latestPunishmentData[it.uniqueId]!![0] as Long) < resultSet.getLong("time")) {
+                                                latestPunishmentData[it.uniqueId] = listOf(
+                                                    resultSet.getLong("time"),
+                                                    resultSet.getString("reason"),
+                                                    "추방",
+                                                    0L,
+                                                    false,
+                                                    resultSet.getString("banned_by_uuid")
+                                                )
+                                            }
+                                        }
+                                    }
+                                    statement.close()
+                                }
+                            }
+                            count
+                        }
+                        val mutedCount = targetPlayers.map {
+                            var count: Long
+                            db.prepareStatement("SELECT COUNT(*) FROM {mutes} WHERE uuid=?").apply {
+                                setString(1, it.uniqueId.toString())
+                            }.use { statement ->
+                                statement.executeQuery().use { resultSet ->
+                                    count = if (resultSet.next()) {
+                                        resultSet.getLong(1)
+                                    } else {
+                                        0
+                                    }
+                                }
+                                statement.close()
+                            }
+
+                            if (count > 0) {
+                                db.prepareStatement("SELECT * FROM {mutes} WHERE uuid=? ORDER BY id DESC LIMIT 1").apply {
+                                    setString(1, it.uniqueId.toString())
+                                }.use { statement ->
+                                    statement.executeQuery().use { resultSet ->
+                                        if (resultSet.next()) {
+                                            if (latestPunishmentData[it.uniqueId] == null || (latestPunishmentData[it.uniqueId]!![0] as Long) < resultSet.getLong("time")) {
+                                                latestPunishmentData[it.uniqueId] = listOf(
+                                                    resultSet.getLong("time"),
+                                                    resultSet.getString("reason"),
+                                                    "채금",
+                                                    resultSet.getLong("until"),
+                                                    resultSet.getBoolean("active"),
+                                                    resultSet.getString("banned_by_uuid")
+                                                )
+                                            }
+                                        }
+                                    }
+                                    statement.close()
+                                }
+                            }
+                            count
+                        }
+                        val warnedCount = targetPlayers.map {
+                            var count: Long
+                            db.prepareStatement("SELECT COUNT(*) FROM {warnings} WHERE uuid=?").apply {
+                                setString(1, it.uniqueId.toString())
+                            }.use { statement ->
+                                statement.executeQuery().use { resultSet ->
+                                    count = if (resultSet.next()) {
+                                        resultSet.getLong(1)
+                                    } else {
+                                        0
+                                    }
+                                }
+                                statement.close()
+                            }
+
+                            if (count > 0) {
+                                db.prepareStatement("SELECT * FROM {warnings} WHERE uuid=? ORDER BY id DESC LIMIT 1").apply {
+                                    setString(1, it.uniqueId.toString())
+                                }.use { statement ->
+                                    statement.executeQuery().use { resultSet ->
+                                        if (resultSet.next()) {
+                                            if (latestPunishmentData[it.uniqueId] == null || (latestPunishmentData[it.uniqueId]!![0] as Long) < resultSet.getLong("time")) {
+                                                latestPunishmentData[it.uniqueId] = listOf(
+                                                    resultSet.getLong("time"),
+                                                    resultSet.getString("reason"),
+                                                    "경고",
+                                                    resultSet.getLong("until"),
+                                                    resultSet.getBoolean("active"),
+                                                    resultSet.getString("banned_by_uuid")
+                                                )
+                                            }
+                                        }
+                                    }
+                                    statement.close()
+                                }
+                            }
+                            count
+                        }
+
+                        liteBansDataCollection = listOf(isBanned, isMuted, bannedCount, kickedCount, mutedCount, warnedCount, latestPunishmentData)
+                    }.thenRun {
+                        data[sender.uniqueId] = mutableListOf(targetPlayers, liteBansDataCollection, 0)
+
+                        a = if (targetPlayers.size > 1) {
+                            // 플레이어가 여러명일 경우
+                            MultiplePlayers().liteBans(sender)
+                        } else {
+                            // 플레이어가 한명일 경우
+                            SinglePlayer().liteBans(sender)
+                        }
                     }
                 } else {
-                    // 플레이어가 한명일 경우
-                    if (Main.liteBans_enable) {
-                        // LiteBans가 활성화 되어있을 경우
-                        // TODO 다시 만들기
+                    data[sender.uniqueId] = mutableListOf(targetPlayers, null, 0)
+
+                    a = if (targetPlayers.size > 1) {
+                        // 플레이어가 여러명일 경우
+                        MultiplePlayers().vanilla(sender)
                     } else {
-                        // LiteBans가 비활성화 되어있을 경우
-                        a = SinglePlayer().vanilla(sender, targetPlayers[0])
+                        // 플레이어가 한명일 경우
+                        SinglePlayer().vanilla(sender)
                     }
                 }
+
                 return a
             } catch (e: IllegalStateException) {
                 sender.sendMessage(errorByServer)
@@ -146,6 +319,10 @@ internal class PunishmentGUI {
                     }
                 }
                 PluginType.VANILLA -> {
+                    val worlds = Bukkit.getWorlds()
+                    val currentFeedback = worlds.map { world -> world.getGameRuleValue(GameRule.SEND_COMMAND_FEEDBACK) }
+                    worlds.forEach { world -> world.setGameRule(GameRule.SEND_COMMAND_FEEDBACK, false) }
+
                     when(punishmentType) {
                         PunishmentType.BAN -> {
                             sender.performCommand("minecraft:ban ${it.name} $reason")
@@ -163,6 +340,8 @@ internal class PunishmentGUI {
                             sender.sendMessage(Component.text("§c해당 기능은 'LiteBans' 플러그인이 있을 때만 사용할 수 있습니다."))
                         }
                     }
+
+                    worlds.forEachIndexed { index, world -> world.setGameRule(GameRule.SEND_COMMAND_FEEDBACK, currentFeedback[index]!!) }
                 }
             }
         }

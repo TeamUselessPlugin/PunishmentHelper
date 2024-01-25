@@ -3,9 +3,10 @@ package io.github.teamuselessplugin.punishment.command
 import dev.jorel.commandapi.CommandAPICommand
 import dev.jorel.commandapi.executors.PlayerCommandExecutor
 import io.github.monun.invfx.openFrame
+import io.github.teamuselessplugin.punishment.Main
 import io.github.teamuselessplugin.punishment.event.BlockEvents
 import io.github.teamuselessplugin.punishment.`interface`.Command
-import io.github.teamuselessplugin.punishment.invfx.PunishmentGUI
+import io.github.teamuselessplugin.punishment.invfx.SinglePlayer
 import net.kyori.adventure.text.Component
 import org.bukkit.Bukkit
 import org.bukkit.Sound
@@ -32,7 +33,12 @@ internal class StopTrackingTarget : Command {
                     BlockEvents.oldLocation.remove(sender.uniqueId)
                     BlockEvents.oldGameMode.remove(sender.uniqueId)
                     BlockEvents.trackingPlayer.remove(sender.uniqueId)
-                    sender.openFrame(PunishmentGUI().main(sender, listOf(playerOffline.uniqueId))!!)
+
+                    if (Main.liteBans_enable) {
+                        sender.openFrame(SinglePlayer().liteBans(sender))
+                    } else {
+                        sender.openFrame(SinglePlayer().vanilla(sender))
+                    }
                 } else {
                     sender.sendMessage("추적 중이 아닙니다.")
                 }

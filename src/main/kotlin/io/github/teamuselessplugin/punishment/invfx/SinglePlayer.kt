@@ -22,32 +22,36 @@ import org.bukkit.inventory.ItemStack
 import org.bukkit.inventory.meta.SkullMeta
 import java.util.*
 
+@Suppress("UNCHECKED_CAST")
 internal class SinglePlayer {
-    fun vanilla(sender: Player, targetPlayer: OfflinePlayer): InvFrame {
-        val isOnline: Boolean = targetPlayer.isOnline
-        val targetUUID: UUID = targetPlayer.uniqueId
-        val targetPlayerOnline: Player? = if (targetPlayer.isOnline) targetPlayer.player else null
+    fun vanilla(sender: Player): InvFrame {
+        val targetPlayer: List<OfflinePlayer> = (PunishmentGUI.data[sender.uniqueId] as MutableList<Any>)[0] as List<OfflinePlayer>
+        val select: Int = (PunishmentGUI.data[sender.uniqueId] as MutableList<Any>)[2] as Int
+
+        val isOnline: Boolean = targetPlayer[select].isOnline
+        val targetUUID: UUID = targetPlayer[select].uniqueId
+        val targetPlayerOnline: Player? = if (targetPlayer[select].isOnline) targetPlayer[select].player else null
         val gui = PunishmentGUI()
 
         return frame(6, Component.text("Punishment GUI")) {
-            val isBanned = targetPlayer.isBanned
+            val isBanned = targetPlayer[select].isBanned
 
             // Player Head
             slot(4, 0) {
                 item = ItemStack(Material.PLAYER_HEAD).apply {
 
                     itemMeta = itemMeta.apply {
-                        (this as SkullMeta).owningPlayer = targetPlayer
+                        (this as SkullMeta).owningPlayer = targetPlayer[select]
 
                         if (!isBanned && isOnline) {
                             displayName(
-                                Component.text("${targetPlayer.name} [${targetPlayer.uniqueId}]")
+                                Component.text("${targetPlayer[select].name} [${targetPlayer[select].uniqueId}]")
                                     .color(TextColor.color(Color.WHITE.asRGB()))
                             )
 
                         } else if (isBanned) {
                             displayName(
-                                Component.text("${targetPlayer.name} [${targetPlayer.uniqueId}]")
+                                Component.text("${targetPlayer[select].name} [${targetPlayer[select].uniqueId}]")
                                     .decorate(TextDecoration.STRIKETHROUGH)
                                     .color(TextColor.color(Color.GRAY.asRGB()))
                             )
@@ -59,7 +63,7 @@ internal class SinglePlayer {
                             )
                         } else {
                             displayName(
-                                Component.text("${targetPlayer.name} [${targetPlayer.uniqueId}]")
+                                Component.text("${targetPlayer[select].name} [${targetPlayer[select].uniqueId}]")
                                     .color(TextColor.color(Color.GRAY.asRGB()))
                             )
 
@@ -98,10 +102,14 @@ internal class SinglePlayer {
                     }
 
                     onClick {
-                        sender.performCommand("minecraft:pardon ${targetPlayer.name}")
+                        val worlds = Bukkit.getWorlds()
+                        val currentFeedback = worlds.map { world -> world.getGameRuleValue(GameRule.SEND_COMMAND_FEEDBACK) }
+                        worlds.forEach { world -> world.setGameRule(GameRule.SEND_COMMAND_FEEDBACK, false) }
+                        sender.performCommand("minecraft:pardon ${targetPlayer[select].name}")
+                        worlds.forEachIndexed { index, world -> world.setGameRule(GameRule.SEND_COMMAND_FEEDBACK, currentFeedback[index]!!) }
                         sender.playSound(sender.location, Sound.BLOCK_NOTE_BLOCK_PLING, 1f, 2f)
-                        sender.sendMessage(Component.text("§a${targetPlayer.name}님의 차단이 해제되었습니다."))
-                        sender.openFrame(gui.main(sender, listOf(targetUUID))!!)
+                        sender.sendMessage(Component.text("§a${targetPlayer[select].name}님의 차단이 해제되었습니다."))
+                        sender.openFrame(vanilla(sender))
                     }
                 }
             }
@@ -146,7 +154,7 @@ internal class SinglePlayer {
                     } else {
                         if (isOnline) {
                             BlockEvents.tracking[sender.uniqueId] = true
-                            sender.sendMessage(Component.text("§a${targetPlayer.name}님에 대한 추적이 설정되었습니다."))
+                            sender.sendMessage(Component.text("§a${targetPlayer[select].name}님에 대한 추적이 설정되었습니다."))
                             sender.sendMessage(Component.text("§a추적을 종료하려면 ")
                                 .append(Component.text("/추적종료")
                                     .clickEvent(ClickEvent.runCommand("/추적종료"))
@@ -155,7 +163,7 @@ internal class SinglePlayer {
 
                             BlockEvents.oldLocation[sender.uniqueId] = sender.location
                             BlockEvents.oldGameMode[sender.uniqueId] = sender.gameMode
-                            BlockEvents.trackingPlayer[sender.uniqueId] = targetPlayer.uniqueId
+                            BlockEvents.trackingPlayer[sender.uniqueId] = targetPlayer[select].uniqueId
 
                             sender.gameMode = GameMode.SPECTATOR
                             sender.teleport(targetPlayerOnline?.location ?: sender.location)
@@ -169,7 +177,7 @@ internal class SinglePlayer {
                                         sender.teleport(targetPlayerOnline.location)
                                     }
                                     glow.show()
-                                    sender.sendActionBar(Component.text("§f${targetPlayer.name}님의 위치: X : §c${targetPlayerOnline.location.blockX}§f, Y : §c${targetPlayerOnline.location.blockY}§f, Z : §c${targetPlayerOnline.location.blockZ} §f[거리 : §c${Math.round(sender.location.distance(targetPlayerOnline.location))}m§f]"))
+                                    sender.sendActionBar(Component.text("§f${targetPlayer[select].name}님의 위치: X : §c${targetPlayerOnline.location.blockX}§f, Y : §c${targetPlayerOnline.location.blockY}§f, Z : §c${targetPlayerOnline.location.blockZ} §f[거리 : §c${Math.round(sender.location.distance(targetPlayerOnline.location))}m§f]"))
                                     delay(50L)
                                 }
                                 glow.hide()
@@ -183,7 +191,7 @@ internal class SinglePlayer {
 
             // Block Movement Button
             slot(3, 4) {
-                if (BlockEvents.blocker[targetPlayer.uniqueId] == true) {
+                if (BlockEvents.blocker[targetPlayer[select].uniqueId] == true) {
                     item = ItemStack(Material.STRUCTURE_VOID).apply {
                         itemMeta = itemMeta.apply {
                             displayName(Component.text("§c이동 제한 & 상호작용 제한 §a(설정됨)"))
@@ -204,13 +212,13 @@ internal class SinglePlayer {
                 onClick {
                     if (isOnline) {
                         sender.playSound(sender.location, Sound.BLOCK_NOTE_BLOCK_PLING, 1f, 2f)
-                        if (BlockEvents.blocker[targetPlayer.uniqueId] == true) {
-                            BlockEvents.blocker[targetPlayer.uniqueId] = false
-                            sender.sendMessage(Component.text("§a${targetPlayer.name}님의 이동 제한 상태가 해제되었습니다."))
+                        if (BlockEvents.blocker[targetPlayer[select].uniqueId] == true) {
+                            BlockEvents.blocker[targetPlayer[select].uniqueId] = false
+                            sender.sendMessage(Component.text("§a${targetPlayer[select].name}님의 이동 제한 상태가 해제되었습니다."))
                             sender.openFrame(gui.main(sender, listOf(targetUUID))!!)
                         } else {
-                            BlockEvents.blocker[targetPlayer.uniqueId] = true
-                            sender.sendMessage(Component.text("§a${targetPlayer.name}님의 이동 제한 상태가 설정되었습니다."))
+                            BlockEvents.blocker[targetPlayer[select].uniqueId] = true
+                            sender.sendMessage(Component.text("§a${targetPlayer[select].name}님의 이동 제한 상태가 설정되었습니다."))
                             sender.openFrame(gui.main(sender, listOf(targetUUID))!!)
                         }
                     } else {
@@ -251,6 +259,53 @@ internal class SinglePlayer {
                 }
             }
             /* Admin Buttons */
+
+            if (targetPlayer.size > 1) {
+                // Back
+                slot(0, 0) {
+                    item = ItemStack(Material.ARROW).apply {
+                        itemMeta = itemMeta.apply {
+                            displayName(Component.text("§c뒤로"))
+                            lore(listOf(Component.text("§7이전 페이지로 돌아갑니다.")))
+                        }
+                    }
+
+                    onClick {
+                        if (select == 0) {
+                            sender.openFrame(MultiplePlayers().vanilla(sender))
+                        } else {
+                            (PunishmentGUI.data[sender.uniqueId] as MutableList<Any>)[2] = select - 1
+                            sender.openFrame(vanilla(sender))
+                        }
+                    }
+                }
+
+                if (select != targetPlayer.size - 1) {
+                    // Next
+                    slot(8, 0) {
+                        item = ItemStack(Material.ARROW).apply {
+                            itemMeta = itemMeta.apply {
+                                displayName(Component.text("§c다음"))
+                                lore(listOf(Component.text("§7다음 페이지로 넘어갑니다.")))
+                            }
+                        }
+
+                        onClick {
+                            (PunishmentGUI.data[sender.uniqueId] as MutableList<Any>)[2] = select + 1
+                            sender.openFrame(vanilla(sender))
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fun liteBans(sender: Player, select: Int = 0): InvFrame {
+        val targetPlayer: List<OfflinePlayer> = (PunishmentGUI.data[sender.uniqueId] as List<Any>)[0] as List<OfflinePlayer>
+        val collection: List<Any> = (PunishmentGUI.data[sender.uniqueId] as List<Any>)[1] as List<Any>
+
+        return frame(1, Component.text("Hello")) {
+            println(collection)
         }
     }
 }
