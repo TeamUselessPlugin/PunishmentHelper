@@ -3,14 +3,13 @@ package io.github.teamuselessplugin.punishment
 import dev.jorel.commandapi.CommandAPI
 import dev.jorel.commandapi.CommandAPIBukkitConfig
 import io.github.kill00.configapi.cfg
-import io.github.teamuselessplugin.punishment.commands.Punishment
-import io.github.teamuselessplugin.punishment.events.BlockEvents
-import io.github.teamuselessplugin.punishment.events.Events
-import io.github.teamuselessplugin.punishment.events.StickFinderEvent
+import io.github.teamuselessplugin.punishment.event.BlockEvents
+import io.github.teamuselessplugin.punishment.event.Events
+import io.github.teamuselessplugin.punishment.event.StickFinderEvent
 import org.bukkit.configuration.file.FileConfiguration
 import org.bukkit.plugin.java.JavaPlugin
 
-class Main : JavaPlugin() {
+internal class Main : JavaPlugin() {
     companion object {
         var conf: FileConfiguration? = null
         var template: FileConfiguration? = null
@@ -34,7 +33,7 @@ class Main : JavaPlugin() {
         instance = this
 
         // 커맨드 등록
-        Punishment().register()
+        CommandHandler().register()
 
         // 이벤트 등록
         server.pluginManager.registerEvents(Events(), this)

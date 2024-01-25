@@ -1,4 +1,4 @@
-package io.github.teamuselessplugin.punishment.events
+package io.github.teamuselessplugin.punishment.event
 
 import net.kyori.adventure.text.Component
 import org.bukkit.GameMode
@@ -18,11 +18,11 @@ import org.bukkit.event.player.PlayerMoveEvent
 import java.util.*
 import kotlin.collections.HashMap
 
-class BlockEvents : Listener {
+internal class BlockEvents : Listener {
     companion object {
         val tracking: HashMap<UUID, Boolean> = HashMap()
         val trackingPlayer: HashMap<UUID, UUID> = HashMap()
-        val oldLoc: HashMap<UUID, Location> = HashMap()
+        val oldLocation: HashMap<UUID, Location> = HashMap()
         val oldGameMode: HashMap<UUID, GameMode> = HashMap()
 
         val blocker: HashMap<UUID, Boolean> = HashMap()

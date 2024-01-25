@@ -13,7 +13,7 @@ import org.bukkit.entity.Player
 import org.bukkit.potion.PotionEffectType
 import kotlin.experimental.and
 
-class GlowPlayer(private var target: Player? = null) {
+internal class GlowPlayer(private var target: Player? = null) {
     private val watchers = mutableListOf<Player>()
     private var protocolListener: PacketAdapter? = null
 
