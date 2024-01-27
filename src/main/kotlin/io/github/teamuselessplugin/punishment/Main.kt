@@ -23,8 +23,12 @@ internal class Main : JavaPlugin() {
     override fun onEnable() {
         // 콘피그 세팅
         cfg.register(this)
-        cfg.makeData("config.yml").also { conf = cfg.get("config.yml")!! }
-        cfg.makeData("template.yml").also { template = cfg.get("template.yml")!! }
+
+        cfg.makeData("config.yml")
+        conf = cfg.get("config.yml")!!
+
+        cfg.makeData("template.yml")
+        template = cfg.get("template.yml")!!
 
         // LiteBans 연동
         liteBans_enable = server.pluginManager.getPlugin("LiteBans") != null

@@ -27,8 +27,7 @@ internal class Punishment : Command {
                         Bukkit.getOnlinePlayers().forEach { add(it.name) }
                         Bukkit.getOfflinePlayers().forEach { if (!contains(it.name)) add(it.name.toString()) }
                     }
-                })
-                .withMapper { it }.buildGreedy())
+                }).withMapper { it }.buildGreedy())
             .executesPlayer(PlayerCommandExecutor { sender, args ->
                 val player = mutableListOf<OfflinePlayer>().apply {
                     (args[0] as List<String>).forEach { name ->
@@ -36,16 +35,22 @@ internal class Punishment : Command {
                     }
                 }
 
-                if (!player.contains(sender)) {
-                    if (!player.map { it.isOnline }.contains(false) && !player.map { it.player?.hasPermission("punishment.bypass")!! }.contains(true)) {
-                        PunishmentGUI().main(sender, player.map { it.uniqueId })?.let { sender.openFrame(it) }
-                    } else if (!player.map { it.isOnline }.contains(false) && player.map { it.player?.hasPermission("punishment.bypass")!! }.contains(true)) {
-                        sender.sendMessage("해당 플레이어에 대한 처벌 GUI를 활성화 할 수 없습니다.")
-                    } else {
-                        PunishmentGUI().main(sender, player.map { it.uniqueId })?.let { sender.openFrame(it) }
+                // 명령어 실행 대상에 자기 자신이 포함되어 있는지 확인
+                if (player.contains(sender)) {
+                    return@PlayerCommandExecutor sender.sendMessage("자기 자신에게는 처벌 GUI를 활성화 할 수 없습니다.")
+                }
+
+                // 펄미션 확인
+                if (!player.map { it.isOnline }.contains(false) && !player.map { it.player?.hasPermission("punishment.bypass")!! }.contains(true)) {
+                    PunishmentGUI().main(sender, player.map { it.uniqueId })?.let {
+                        sender.openFrame(it)
                     }
+                } else if (!player.map { it.isOnline }.contains(false) && player.map { it.player?.hasPermission("punishment.bypass")!! }.contains(true)) {
+                    sender.sendMessage("해당 플레이어에 대한 처벌 GUI를 활성화 할 수 없습니다.")
                 } else {
-                    sender.sendMessage("자기 자신에게는 처벌 GUI를 활성화 할 수 없습니다.")
+                    PunishmentGUI().main(sender, player.map { it.uniqueId })?.let {
+                        sender.openFrame(it)
+                    }
                 }
             }).register()
     }

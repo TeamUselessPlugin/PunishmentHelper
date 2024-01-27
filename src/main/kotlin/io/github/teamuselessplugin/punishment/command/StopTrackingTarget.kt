@@ -4,8 +4,8 @@ import dev.jorel.commandapi.CommandAPICommand
 import dev.jorel.commandapi.executors.PlayerCommandExecutor
 import io.github.monun.invfx.openFrame
 import io.github.teamuselessplugin.punishment.Main
-import io.github.teamuselessplugin.punishment.event.BlockEvents
 import io.github.teamuselessplugin.punishment.`interface`.Command
+import io.github.teamuselessplugin.punishment.invfx.PunishmentGUI
 import io.github.teamuselessplugin.punishment.invfx.SinglePlayer
 import net.kyori.adventure.text.Component
 import org.bukkit.Bukkit
@@ -20,27 +20,29 @@ internal class StopTrackingTarget : Command {
             .withAliases("추적종료")
             .withPermission("punishment.gui")
             .executesPlayer(PlayerCommandExecutor { sender, _ ->
-                if (BlockEvents.tracking[sender.uniqueId] == true) {
-                    val playerOffline = Bukkit.getOfflinePlayer(BlockEvents.trackingPlayer[sender.uniqueId]!!)
 
-                    BlockEvents.tracking[sender.uniqueId] = false
-                    sender.sendMessage(Component.text("§a${playerOffline.name}님에 대한 추적이 해제되었습니다."))
+                // 추적 중인 플레이어가 없는지 확인
+                if (PunishmentGUI.tracking[sender.uniqueId] == false || PunishmentGUI.trackingPlayer[sender.uniqueId] == null) {
+                    return@PlayerCommandExecutor sender.sendMessage("추적 중인 플레이어가 없습니다.")
+                }
 
-                    sender.teleport(BlockEvents.oldLocation[sender.uniqueId]!!)
-                    sender.gameMode = BlockEvents.oldGameMode[sender.uniqueId]!!
-                    sender.playSound(sender.location, Sound.BLOCK_NOTE_BLOCK_PLING, 1f, 2f)
+                val playerOffline = Bukkit.getOfflinePlayer(PunishmentGUI.trackingPlayer[sender.uniqueId]!!)
 
-                    BlockEvents.oldLocation.remove(sender.uniqueId)
-                    BlockEvents.oldGameMode.remove(sender.uniqueId)
-                    BlockEvents.trackingPlayer.remove(sender.uniqueId)
+                PunishmentGUI.tracking[sender.uniqueId] = false
+                sender.sendMessage(Component.text("§a${playerOffline.name}님에 대한 추적이 해제되었습니다."))
 
-                    if (Main.liteBans_enable) {
-                        sender.openFrame(SinglePlayer().liteBans(sender))
-                    } else {
-                        sender.openFrame(SinglePlayer().vanilla(sender))
-                    }
+                sender.teleport(PunishmentGUI.oldLocation[sender.uniqueId]!!)
+                sender.gameMode = PunishmentGUI.oldGameMode[sender.uniqueId]!!
+                sender.playSound(sender.location, Sound.BLOCK_NOTE_BLOCK_PLING, 1f, 2f)
+
+                PunishmentGUI.oldLocation.remove(sender.uniqueId)
+                PunishmentGUI.oldGameMode.remove(sender.uniqueId)
+                PunishmentGUI.trackingPlayer.remove(sender.uniqueId)
+
+                if (Main.liteBans_enable) {
+                    sender.openFrame(SinglePlayer().liteBans(sender))
                 } else {
-                    sender.sendMessage("추적 중이 아닙니다.")
+                    sender.openFrame(SinglePlayer().vanilla(sender))
                 }
             }).register()
     }

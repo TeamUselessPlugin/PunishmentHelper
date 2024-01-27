@@ -130,7 +130,7 @@ internal class SinglePlayer {
 
             // Tracking Player Button
             slot(1, 4) {
-                if (BlockEvents.tracking[sender.uniqueId] == true) {
+                if (PunishmentGUI.tracking[sender.uniqueId] == true) {
                     item = ItemStack(Material.COMPASS).apply {
                         itemMeta = itemMeta.apply {
                             displayName(Component.text("§c플레이어 추적 §a(설정됨)"))
@@ -149,11 +149,11 @@ internal class SinglePlayer {
                 }
 
                 onClick {
-                    if (BlockEvents.tracking[sender.uniqueId] == true) {
+                    if (PunishmentGUI.tracking[sender.uniqueId] == true) {
                         sender.performCommand("punishment-tracking-end")
                     } else {
                         if (isOnline) {
-                            BlockEvents.tracking[sender.uniqueId] = true
+                            PunishmentGUI.tracking[sender.uniqueId] = true
                             sender.sendMessage(Component.text("§a${targetPlayer[select].name}님에 대한 추적이 설정되었습니다."))
                             sender.sendMessage(Component.text("§a추적을 종료하려면 ")
                                 .append(Component.text("/추적종료")
@@ -161,9 +161,9 @@ internal class SinglePlayer {
                                     .hoverEvent(HoverEvent.showText(Component.text("§7클릭하여 추적을 종료합니다."))))
                                 .append(Component.text("§a를 입력하세요.")))
 
-                            BlockEvents.oldLocation[sender.uniqueId] = sender.location
-                            BlockEvents.oldGameMode[sender.uniqueId] = sender.gameMode
-                            BlockEvents.trackingPlayer[sender.uniqueId] = targetPlayer[select].uniqueId
+                            PunishmentGUI.oldLocation[sender.uniqueId] = sender.location
+                            PunishmentGUI.oldGameMode[sender.uniqueId] = sender.gameMode
+                            PunishmentGUI.trackingPlayer[sender.uniqueId] = targetPlayer[select].uniqueId
 
                             sender.gameMode = GameMode.SPECTATOR
                             sender.teleport(targetPlayerOnline?.location ?: sender.location)
@@ -172,7 +172,7 @@ internal class SinglePlayer {
 
                             HeartbeatScope().launch {
                                 val glow = GlowPlayer(targetPlayerOnline).apply { addWatcher(sender) }
-                                while (BlockEvents.tracking[sender.uniqueId] == true) {
+                                while (PunishmentGUI.tracking[sender.uniqueId] == true) {
                                     if (sender.location.distance(targetPlayerOnline?.location!!) > Main.conf?.getInt("trackingDistance")!!) {
                                         sender.teleport(targetPlayerOnline.location)
                                     }
