@@ -173,8 +173,8 @@ internal class SinglePlayer {
                             HeartbeatScope().launch {
                                 val glow = GlowPlayer(targetPlayerOnline).apply { addWatcher(sender) }
                                 while (PunishmentGUI.tracking[sender.uniqueId] == true) {
-                                    if (sender.location.distance(targetPlayerOnline?.location!!) > Main.conf?.getInt("trackingDistance")!!) {
-                                        sender.teleport(targetPlayerOnline.location)
+                                    if (sender.world != targetPlayerOnline?.world || sender.location.distance(targetPlayerOnline.location) > Main.conf?.getInt("trackingDistance")!!) {
+                                        sender.teleport(targetPlayerOnline?.location!!)
                                     }
                                     glow.show()
                                     sender.sendActionBar(Component.text("§f${targetPlayer[select].name}님의 위치: X : §c${targetPlayerOnline.location.blockX}§f, Y : §c${targetPlayerOnline.location.blockY}§f, Z : §c${targetPlayerOnline.location.blockZ} §f[거리 : §c${Math.round(sender.location.distance(targetPlayerOnline.location))}m§f]"))
