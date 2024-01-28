@@ -1,9 +1,12 @@
 package io.github.teamuselessplugin.punishment.invfx
 
+import io.github.monun.heartbeat.coroutines.HeartbeatScope
 import io.github.monun.invfx.InvFX.frame
 import io.github.monun.invfx.frame.InvFrame
 import io.github.monun.invfx.openFrame
 import io.github.teamuselessplugin.punishment.Main
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import litebans.api.Database
 import net.kyori.adventure.text.Component
 import org.bukkit.*
@@ -32,6 +35,7 @@ internal class PunishmentGUI {
          *
          * @suppress `HashMap<UUID, Any>` 타입으로 선언되어 있지만, 실제로는 `HashMap<UUID, MutableList<Any>>` 타입으로 사용됩니다.
          * @return [[targetPlayers, liteBansDataCollection, currentPage]]
+         * @see liteBansDataCollection
          */
         var data = HashMap<UUID, Any>()
 
@@ -39,32 +43,47 @@ internal class PunishmentGUI {
         val trackingPlayer: HashMap<UUID, UUID> = HashMap()
         val oldLocation: HashMap<UUID, Location> = HashMap()
         val oldGameMode: HashMap<UUID, GameMode> = HashMap()
+
+        val errorByServer = Component.text("§c데이터를 가져올 수 없습니다. 관리자에게 문의해주세요.")
+        val errorByPlayer = Component.text("§c플레이어 데이터를 가져올 수 없습니다.")
+        val errorIsOfflinePlayer = Component.text("§c오프라인 플레이어입니다.")
     }
 
-    val errorByServer = Component.text("§c데이터를 가져올 수 없습니다. 관리자에게 문의해주세요.")
-    val errorByPlayer = Component.text("§c플레이어 데이터를 가져올 수 없습니다.")
-    val errorIsOfflinePlayer = Component.text("§c오프라인 플레이어입니다.")
+    /**
+     * LiteBans 데이터를 저장하는 변수입니다.
+     *
+     * @suppress `List<Any>` 타입으로 선언되어 있지만, 실제로는 일부 제외 `List<List<Any>>` 타입으로 사용됩니다.
+     * @return [[isBanned(Boolean), isMuted(List:Boolean), bannedCount(List:Long), kickedCount(List:Long), mutedCount(List:Long), warnedCount(List:Long), latestPunishmentData(HashMap:UUID, List)]]
+     * @see latestPunishmentData
+     */
+    private var liteBansDataCollection: List<Any>? = null
 
-    fun main(sender: Player, targetUUID: List<UUID>): InvFrame? {
+    /**
+     * LiteBans에서 가장 최근에 적용된 처벌 데이터를 저장하는 변수입니다.
+     *
+     * @return [[time(List:Long), reason(List:String), type(List:String), until(List:Long), active(List:Boolean), banned_by_uuid(List:String)]]
+     */
+    private val latestPunishmentData: HashMap<UUID, List<Any>> = HashMap()
+
+    fun main(sender: Player, targetUUID: List<UUID>) {
         val targetPlayers: List<OfflinePlayer> = targetUUID.map { Bukkit.getOfflinePlayer(it) }
         val isValid: List<Boolean> = targetPlayers.map { it.hasPlayedBefore() || it.isOnline }
 
         // 선택된 플레이어 중 플레이어가 유효한 데이터를 가지고 있지 않을 경우
         if (isValid.contains(false)) {
             sender.sendMessage(errorByPlayer)
-            return null
+            return
         }
 
         try {
             var a: InvFrame? = null
 
-            // liteBansDataCollection: isBanned, isMuted, bannedCount, kickedCount, mutedCount, warnedCount, latestPunishmentData
-            var liteBansDataCollection: List<Any>? = null
             if (Main.liteBans_enable) {
                 // LiteBans가 활성화 되어있을 경우
-
-                // latestPunishmentData: time, reason, type, until, active, banned_by_uuid
-                val latestPunishmentData: HashMap<UUID, List<Any>> = HashMap()
+                if (latestPunishmentData.isNotEmpty() || liteBansDataCollection != null) {
+                    latestPunishmentData.clear()
+                    liteBansDataCollection = null
+                }
 
                 CompletableFuture.runAsync {
                     val db = Database.get()
@@ -224,7 +243,6 @@ internal class PunishmentGUI {
                     }
 
                     liteBansDataCollection = listOf(isBanned, isMuted, bannedCount, kickedCount, mutedCount, warnedCount, latestPunishmentData)
-                }.thenRun {
                     data[sender.uniqueId] = mutableListOf(targetPlayers, liteBansDataCollection, 0)
 
                     a = if (targetPlayers.size > 1) {
@@ -247,12 +265,19 @@ internal class PunishmentGUI {
                 }
             }
 
-            return a
+            HeartbeatScope().launch {
+                while (a == null) {
+                    sender.sendActionBar(Component.text("데이터를 가져오는 중..."))
+                    delay(50)
+                }
+
+                if (Main.liteBans_enable) sender.sendActionBar(Component.text("데이터를 가져왔습니다."))
+                sender.openFrame(a!!)
+            }
         } catch (e: IllegalStateException) {
             sender.sendMessage(errorByServer)
             e.printStackTrace()
         }
-        return null
     }
 
     internal fun template(sender: Player, targetUUID: List<UUID>, punishmentType: PunishmentType, pluginType: PluginType): InvFrame {
