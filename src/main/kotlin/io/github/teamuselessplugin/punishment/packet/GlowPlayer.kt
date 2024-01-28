@@ -18,13 +18,21 @@ internal class GlowPlayer(private var target: Player? = null) {
     private var protocolListener: PacketAdapter? = null
 
     /**
+     * 강조 효과가 활성화되어 있는지 여부를 반환합니다.
+     *
+     * @return 활성화 여부
+     */
+    val isEnabled: Boolean
+        get() = protocolListener != null
+
+    /**
      * 지정된 플레이어의 강조 효과를 활성화 합니다.
      *
      * @return 성공 여부
      */
     fun show(): Boolean {
         // 이미 강조 효과가 활성화된 상태거나 플레이어가 지정되지 않은 경우 false를 반환
-        if (protocolListener != null || target == null || watchers.isEmpty()) {
+        if (isEnabled) {
             return false
         }
 
@@ -39,7 +47,7 @@ internal class GlowPlayer(private var target: Player? = null) {
      */
     fun hide(): Boolean {
         // 이미 강조 효과가 비활성화된 상태거나 플레이어가 지정되지 않은 경우 false를 반환
-        if (protocolListener == null || target == null || watchers.isEmpty()) {
+        if (!isEnabled) {
             return false
         }
 
@@ -64,7 +72,7 @@ internal class GlowPlayer(private var target: Player? = null) {
         watchers.add(player)
 
         // 강조 효과가 활성화된 상태일 때
-        if (protocolListener != null) {
+        if (isEnabled) {
             packetSend(0x40.toByte(), mWatcher = listOf(player))
         }
         return true
@@ -85,7 +93,7 @@ internal class GlowPlayer(private var target: Player? = null) {
         watchers.remove(player)
 
         // 강조 효과가 활성화된 상태일 때
-        if (protocolListener != null) {
+        if (isEnabled) {
             packetSend(0x00.toByte(), mWatcher = listOf(player))
         }
         return true
@@ -102,7 +110,7 @@ internal class GlowPlayer(private var target: Player? = null) {
         this.target = target
 
         // 강조 효과가 활성화된 상태일 때
-        if (protocolListener != null) {
+        if (isEnabled) {
             packetSend(0x00.toByte(), mTarget = oldTarget)
             packetSend(0x40.toByte(), mTarget = target)
         }
@@ -140,7 +148,7 @@ internal class GlowPlayer(private var target: Player? = null) {
                 val packet = event.packet.deepClone()
                 var indexZero = 0
 
-                if (watchers.contains(event.player) && event.packet.integers.read(0) == target?.entityId) {
+                if (watchers.contains(event.player) && event.packet.integers.read(0) == target?.entityId!!) {
                     val values = mutableListOf<WrappedDataValue>()
                     packet.dataValueCollectionModifier.read(0).forEach {
                         if (it.index == 0 && (it.value as Byte).and(0x40.toByte()) == 0x00.toByte()) {
@@ -195,8 +203,12 @@ internal class GlowPlayer(private var target: Player? = null) {
         return true
     }
     private fun packetSend(packet: Byte, mTarget: Player? = target, mWatcher: List<Player> = watchers): Boolean {
+        if (mTarget == null || mWatcher.isEmpty()) {
+            return false
+        }
+
         PacketContainer(PacketType.Play.Server.ENTITY_METADATA).let {
-            it.integers.write(0, mTarget?.entityId)
+            it.integers.write(0, mTarget.entityId)
             val serializer = WrappedDataWatcher.Registry.get(Byte::class.javaObjectType)
 
             val value = WrappedDataValue(0, serializer, packet)

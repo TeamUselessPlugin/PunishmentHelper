@@ -53,11 +53,14 @@ internal class StickFinderEvent : Listener {
                 HeartbeatScope().launch {
                     // 중복 실행 방지
                     coroutineEnabled[e.player.uniqueId] = true
-                    val glow = GlowPlayer().apply { addWatcher(e.player) }
+                    val glow = GlowPlayer().apply {
+                        addWatcher(e.player)
+                    }
+
                     while (seeker[e.player.uniqueId] == true) {
                         // 플레이어가 막대기를 들고 있지 않으면 StickFinder 임시 비활성화
                         if (e.player.inventory.itemInMainHand.type != Material.STICK) {
-                            glow.hide()
+                            glow.setTarget(null)
                             target.remove(e.player.uniqueId)
 
                             delay(50L)
@@ -66,7 +69,7 @@ internal class StickFinderEvent : Listener {
 
                         // 플레이어 추적이 활성화 되었을 때 StickFinder 임시 비활성화
                         if (PunishmentGUI.tracking[e.player.uniqueId] != null && PunishmentGUI.tracking[e.player.uniqueId] != false) {
-                            glow.hide()
+                            glow.setTarget(null)
 
                             delay(50L)
                             continue
@@ -93,7 +96,11 @@ internal class StickFinderEvent : Listener {
                         }
                         if (players.size > 0) {
                             target[e.player.uniqueId] = players[0]
-                            glow.setTarget(players[0]).also { glow.show() }
+                            glow.setTarget(players[0])
+
+                            if (!glow.isEnabled) {
+                                glow.show()
+                            }
                         }
 
                         delay(50L)
