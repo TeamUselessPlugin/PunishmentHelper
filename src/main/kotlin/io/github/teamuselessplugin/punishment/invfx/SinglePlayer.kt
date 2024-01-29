@@ -9,7 +9,6 @@ import io.github.teamuselessplugin.punishment.event.BlockEvents
 import io.github.teamuselessplugin.punishment.packet.GlowPlayer
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import litebans.api.Database
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.event.ClickEvent
 import net.kyori.adventure.text.event.HoverEvent
