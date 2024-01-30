@@ -5,706 +5,300 @@ import io.github.monun.invfx.InvFX.frame
 import io.github.monun.invfx.frame.InvFrame
 import io.github.monun.invfx.openFrame
 import io.github.teamuselessplugin.punishment.Main
-import io.github.teamuselessplugin.punishment.events.BlockEvents
-import io.github.teamuselessplugin.punishment.packet.GlowPlayer
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import litebans.api.Database
 import net.kyori.adventure.text.Component
-import net.kyori.adventure.text.event.ClickEvent
-import net.kyori.adventure.text.event.HoverEvent
-import net.kyori.adventure.text.format.TextColor
-import net.kyori.adventure.text.format.TextDecoration
 import org.bukkit.*
 import org.bukkit.enchantments.Enchantment
 import org.bukkit.entity.Player
 import org.bukkit.inventory.ItemFlag
 import org.bukkit.inventory.ItemStack
-import org.bukkit.inventory.meta.SkullMeta
-import java.sql.SQLException
-import java.sql.Timestamp
-import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.CompletableFuture
+import kotlin.collections.HashMap
 
-class PunishmentGUI {
-    private val errorByServer = Component.text("§c데이터를 가져올 수 없습니다. 관리자에게 문의해주세요.")
-    private val errorByPlayer = Component.text("§c플레이어 데이터를 가져올 수 없습니다.")
-    private val errorIsOfflinePlayer = Component.text("§c오프라인 플레이어입니다.")
-    enum class PunishmentType {
+internal class PunishmentGUI {
+    // 처벌 종류
+    internal enum class PunishmentType {
         BAN, KICK, MUTE, WARN
     }
-    enum class PluginType {
+
+    // 플러그인 종류
+    internal enum class PluginType {
         LITEBANS, VANILLA
     }
-    fun main(sender: Player, targetUUID: UUID?): InvFrame? {
-        val playerOffline: OfflinePlayer? = targetUUID?.let { sender.server.getOfflinePlayer(it) }
-        val isValid = playerOffline?.hasPlayedBefore()
-        val isOnline = playerOffline?.isOnline
-        var playerOnline: Player? = null
-        if (isOnline!!) {
-            playerOnline = playerOffline.player
+
+    companion object {
+        /**
+         * 플러그인에서 사용하는 데이터를 저장하는 변수입니다.
+         *
+         * @suppress `HashMap<UUID, Any>` 타입으로 선언되어 있지만, 실제로는 `HashMap<UUID, MutableList<Any>>` 타입으로 사용됩니다.
+         * @return [[targetPlayers, liteBansDataCollection, currentPage]]
+         * @see liteBansDataCollection
+         */
+        var data = HashMap<UUID, Any>()
+
+        val tracking: HashMap<UUID, Boolean> = HashMap()
+        val trackingPlayer: HashMap<UUID, UUID> = HashMap()
+        val oldLocation: HashMap<UUID, Location> = HashMap()
+        val oldGameMode: HashMap<UUID, GameMode> = HashMap()
+
+        val errorByServer = Component.text("§c데이터를 가져올 수 없습니다. 관리자에게 문의해주세요.")
+        val errorByPlayer = Component.text("§c플레이어 데이터를 가져올 수 없습니다.")
+        val errorIsOfflinePlayer = Component.text("§c오프라인 플레이어입니다.")
+    }
+
+    /**
+     * LiteBans 데이터를 저장하는 변수입니다.
+     *
+     * @suppress `List<Any>` 타입으로 선언되어 있지만, 실제로는 일부 제외 `List<List<Any>>` 타입으로 사용됩니다.
+     * @return [[isBanned(Boolean), isMuted(List:Boolean), bannedCount(List:Long), kickedCount(List:Long), mutedCount(List:Long), warnedCount(List:Long), latestPunishmentData(HashMap:UUID, List)]]
+     * @see latestPunishmentData
+     */
+    private var liteBansDataCollection: List<Any>? = null
+
+    /**
+     * LiteBans에서 가장 최근에 적용된 처벌 데이터를 저장하는 변수입니다.
+     *
+     * @return [[time(List:Long), reason(List:String), type(List:String), until(List:Long), active(List:Boolean), banned_by_uuid(List:String)]]
+     */
+    private val latestPunishmentData: HashMap<UUID, List<Any>> = HashMap()
+
+    /**
+     * 메인 GUI를 열어주는 함수입니다.
+     *
+     * @param sender 명령어를 실행한 플레이어
+     * @param targetPlayers 명령어를 실행한 플레이어가 선택한 플레이어
+     */
+    fun main(sender: Player, targetPlayers: List<OfflinePlayer>) {
+        val isValid: List<Boolean> = targetPlayers.map { it.hasPlayedBefore() || it.isOnline }
+
+        // 선택된 플레이어 중 플레이어가 유효한 데이터를 가지고 있지 않을 경우
+        if (isValid.contains(false)) {
+            sender.sendMessage(errorByPlayer)
+            return
         }
 
-        if (isValid!!) {
-            try {
-                var isBanned = false
-                var bannedCount = 0L
-                var kickedCount = 0L
-                var mutedCount = 0L
-                var warnedCount = 0L
-                var latestPunishmentReason = "없음"
-                var latestPunishmentDate = 0L
-                var latestPunishmentType = "없음"
-                var latestPunishmentEndTime = 0L
-                var latestPunishmentActive = false
+        try {
+            var a: InvFrame? = null
 
-                val a: InvFrame?
-                // LiteBan이 활성화 되어있을 경우
-                if (Main.liteBans_enable) {
-                    a = frame(6, Component.text("Punishment GUI")) {
-                        CompletableFuture.runAsync {
-                            // LiteBans이 활성화 되어있을 경우에만 데이터를 가져옴
-                            isBanned = Database.get().isPlayerBanned(playerOffline.uniqueId, null)
-                            try {
-                                Database.get().prepareStatement("SELECT COUNT(*) FROM {bans} WHERE uuid=?").also {
-                                    it.setString(1, playerOffline.uniqueId.toString())
-                                    it.executeQuery().also { rs ->
-                                        if (rs.next()) {
-                                            bannedCount = rs.getLong(1)
-                                        }
-                                        rs.close()
-                                    }
-                                    it.close()
-                                }
-
-                                Database.get().prepareStatement("SELECT COUNT(*) FROM {kicks} WHERE uuid=?").also {
-                                    it.setString(1, playerOffline.uniqueId.toString())
-                                    it.executeQuery().also { rs ->
-                                        if (rs.next()) {
-                                            kickedCount = rs.getLong(1)
-                                        }
-                                        rs.close()
-                                    }
-                                    it.close()
-                                }
-
-                                Database.get().prepareStatement("SELECT COUNT(*) FROM {mutes} WHERE uuid=?").also {
-                                    it.setString(1, playerOffline.uniqueId.toString())
-                                    it.executeQuery().also { rs ->
-                                        if (rs.next()) {
-                                            mutedCount = rs.getLong(1)
-                                        }
-                                        rs.close()
-                                    }
-                                    it.close()
-                                }
-
-                                Database.get().prepareStatement("SELECT COUNT(*) FROM {warnings} WHERE uuid=?").also {
-                                    it.setString(1, playerOffline.uniqueId.toString())
-                                    it.executeQuery().also { rs ->
-                                        if (rs.next()) {
-                                            warnedCount = rs.getLong(1)
-                                        }
-                                        rs.close()
-                                    }
-                                    it.close()
-                                }
-
-                                // Get All Punishment Data (Bans, Kicks, Mutes, Warnings) and Get Latest Punishment Data
-                                if (bannedCount > 0) {
-                                    Database.get().prepareStatement("SELECT * FROM {bans} WHERE uuid=? ORDER BY id DESC LIMIT 1").also {
-                                        it.setString(1, playerOffline.uniqueId.toString())
-                                        it.executeQuery().also { rs ->
-                                            if (rs.next()) {
-                                                if (latestPunishmentDate < rs.getLong("time")) {
-                                                    latestPunishmentReason = rs.getString("reason")
-                                                    latestPunishmentDate = rs.getLong("time")
-                                                    latestPunishmentType = "차단"
-                                                    latestPunishmentEndTime = rs.getLong("until")
-                                                    latestPunishmentActive = rs.getBoolean("active")
-                                                }
-                                            }
-                                            rs.close()
-                                        }
-                                        it.close()
-                                    }
-                                }
-
-                                if (kickedCount > 0) {
-                                    Database.get().prepareStatement("SELECT * FROM {kicks} WHERE uuid=? ORDER BY id DESC LIMIT 1").also {
-                                        it.setString(1, playerOffline.uniqueId.toString())
-                                        it.executeQuery().also { rs ->
-                                            if (rs.next()) {
-                                                if (latestPunishmentDate < rs.getLong("time")) {
-                                                    latestPunishmentReason = rs.getString("reason")
-                                                    latestPunishmentDate = rs.getLong("time")
-                                                    latestPunishmentType = "킥"
-                                                    latestPunishmentEndTime = 0L
-                                                    latestPunishmentActive = false
-                                                }
-                                            }
-                                            rs.close()
-                                        }
-                                        it.close()
-                                    }
-                                }
-
-                                if (mutedCount > 0) {
-                                    Database.get().prepareStatement("SELECT * FROM {mutes} WHERE uuid=? ORDER BY id DESC LIMIT 1").also {
-                                        it.setString(1, playerOffline.uniqueId.toString())
-                                        it.executeQuery().also { rs ->
-                                            if (rs.next()) {
-                                                if (latestPunishmentDate < rs.getLong("time")) {
-                                                    latestPunishmentReason = rs.getString("reason")
-                                                    latestPunishmentDate = rs.getLong("time")
-                                                    latestPunishmentType = "뮤트"
-                                                    latestPunishmentEndTime = rs.getLong("until")
-                                                    latestPunishmentActive = rs.getBoolean("active")
-                                                }
-                                            }
-                                            rs.close()
-                                        }
-                                        it.close()
-                                    }
-                                }
-
-                                if (warnedCount > 0) {
-                                    Database.get().prepareStatement("SELECT * FROM {warnings} WHERE uuid=? ORDER BY id DESC LIMIT 1").also {
-                                        it.setString(1, playerOffline.uniqueId.toString())
-                                        it.executeQuery().also { rs ->
-                                            if (rs.next()) {
-                                                if (latestPunishmentDate < rs.getLong("time")) {
-                                                    latestPunishmentReason = rs.getString("reason")
-                                                    latestPunishmentDate = rs.getLong("time")
-                                                    latestPunishmentType = "경고"
-                                                    latestPunishmentEndTime = 0L
-                                                    latestPunishmentActive = rs.getBoolean("active")
-                                                }
-                                            }
-                                            rs.close()
-                                        }
-                                        it.close()
-                                    }
-                                }
-                            } catch (e: SQLException) {
-                                sender.sendMessage(errorByServer)
-                                e.printStackTrace()
-                            }
-                        }.thenRun {
-                            // Player Head
-                            slot(3, 0) {
-                                item = ItemStack(Material.PLAYER_HEAD).apply {
-
-                                    itemMeta = itemMeta.apply {
-                                        (this as SkullMeta).owningPlayer = playerOffline
-
-                                        if (!isBanned && isOnline) {
-                                            displayName(
-                                                Component.text("${playerOffline.name} [${playerOffline.uniqueId}]")
-                                                    .color(TextColor.color(Color.WHITE.asRGB()))
-                                            )
-
-                                        } else if (isBanned) {
-                                            displayName(
-                                                Component.text("${playerOffline.name} [${playerOffline.uniqueId}]")
-                                                    .decorate(TextDecoration.STRIKETHROUGH)
-                                                    .color(TextColor.color(Color.GRAY.asRGB()))
-                                            )
-
-                                            lore(
-                                                listOf(
-                                                    Component.text("§c이미 서버에서 차단된 플레이어입니다.")
-                                                )
-                                            )
-                                        } else {
-                                            displayName(
-                                                Component.text("${playerOffline.name} [${playerOffline.uniqueId}]")
-                                                    .color(TextColor.color(Color.GRAY.asRGB()))
-                                            )
-
-                                            lore(
-                                                listOf(
-                                                    Component.text("§c오프라인 플레이어입니다.")
-                                                )
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Player Punishment Data
-                            slot(5, 0) {
-                                item = ItemStack(Material.PAPER).apply {
-                                    itemMeta = itemMeta.apply {
-                                        val timeFormat = SimpleDateFormat("yyyy년 MM월 dd일 HH시 mm분 ss초")
-
-                                        val time = Timestamp(latestPunishmentDate)
-                                        val until = Timestamp(latestPunishmentEndTime)
-
-                                        val loreData = mutableListOf<Component>(
-                                            Component.text(""),
-                                            Component.text("§7차단 횟수: §c${bannedCount}회"),
-                                            Component.text("§7추방 횟수: §c${kickedCount}회"),
-                                            Component.text("§7뮤트 횟수: §c${mutedCount}회"),
-                                            Component.text("§7경고 횟수: §c${warnedCount}회"),
-                                            Component.text(""),
-                                            Component.text("§7최근 처벌: §c${latestPunishmentType}"),
-                                            Component.text("§7처벌 이유: §c${latestPunishmentReason}"),
-                                            Component.text("§7처벌 날짜: §c${timeFormat.format(time)}"),
-                                            Component.text("§7처벌 종료: §c${timeFormat.format(until)}"),
-                                            Component.text("§7처벌 상태: §c${if (latestPunishmentActive) "활성화" else "비활성화"}")
-                                        )
-
-                                        if (latestPunishmentEndTime == 0L) {
-                                            loreData[9] = Component.text("§7처벌 종료: §c영구")
-                                        }
-
-                                        if (latestPunishmentType == "없음") {
-                                            loreData.removeAt(10)
-                                            loreData.removeAt(9)
-                                            loreData.removeAt(8)
-                                            loreData.removeAt(7)
-                                            loreData.removeAt(6)
-                                            loreData.removeAt(5)
-                                        }
-
-                                        displayName(Component.text("${playerOffline.name}님의 처벌 기록"))
-
-                                        lore(loreData)
-                                    }
-                                }
-                            }
-
-                            /* Admin Buttons */
-                            // Ban Button
-                            slot(1, 2) {
-                                item = ItemStack(Material.BARRIER).apply {
-                                    itemMeta = itemMeta.apply {
-                                        displayName(Component.text("§c차단"))
-                                        lore(listOf(Component.text("§7플레이어를 서버에서 차단합니다.")))
-                                    }
-                                }
-
-                                onClick {
-                                    sender.openFrame(template(sender, targetUUID, PunishmentType.BAN, PluginType.LITEBANS))
-                                }
-                            }
-
-                            // Kick Button
-                            slot(3, 2) {
-                                item = ItemStack(Material.IRON_DOOR).apply {
-                                    itemMeta = itemMeta.apply {
-                                        displayName(Component.text("§c추방"))
-                                        lore(listOf(Component.text("§7플레이어를 서버에서 추방합니다.")))
-                                    }
-                                }
-
-                                onClick {
-                                    sender.openFrame(template(sender, targetUUID, PunishmentType.KICK, PluginType.LITEBANS))
-                                }
-                            }
-
-                            // Mute Button
-                            slot(5, 2) {
-                                item = ItemStack(Material.BOOK).apply {
-                                    itemMeta = itemMeta.apply {
-                                        displayName(Component.text("§c뮤트"))
-                                        lore(listOf(Component.text("§7플레이어를 서버에서 뮤트합니다.")))
-                                    }
-                                }
-
-                                onClick {
-                                    sender.openFrame(template(sender, targetUUID, PunishmentType.MUTE, PluginType.LITEBANS))
-                                }
-                            }
-
-                            // Warn Button
-                            slot(7, 2) {
-                                item = ItemStack(Material.PAPER).apply {
-                                    itemMeta = itemMeta.apply {
-                                        displayName(Component.text("§c경고"))
-                                        lore(listOf(Component.text("§7플레이어에게 경고를 부여합니다.")))
-                                    }
-                                }
-
-                                onClick {
-                                    sender.openFrame(template(sender, targetUUID, PunishmentType.WARN, PluginType.LITEBANS))
-                                }
-                            }
-
-                            // Tracking Player Button
-                            slot(1, 4) {
-                                if (BlockEvents.tracking[sender.uniqueId] == true) {
-                                    item = ItemStack(Material.COMPASS).apply {
-                                        itemMeta = itemMeta.apply {
-                                            displayName(Component.text("§c플레이어 추적 §a(설정됨)"))
-                                            lore(listOf(Component.text("§7플레이어를 추적합니다.")))
-                                            addEnchant(Enchantment.DURABILITY, 1, true)
-                                            addItemFlags(ItemFlag.HIDE_ENCHANTS)
-                                        }
-                                    }
-                                } else {
-                                    item = ItemStack(Material.COMPASS).apply {
-                                        itemMeta = itemMeta.apply {
-                                            displayName(Component.text("§c플레이어 추적"))
-                                            lore(listOf(Component.text("§7플레이어를 추적합니다.")))
-                                        }
-                                    }
-                                }
-
-                                onClick {
-                                    if (BlockEvents.tracking[sender.uniqueId] == true) {
-                                        sender.performCommand("punishment-tracking-end")
-                                    } else {
-                                        if (isOnline) {
-                                            BlockEvents.tracking[sender.uniqueId] = true
-                                            sender.sendMessage(Component.text("§a${playerOffline.name}님에 대한 추적이 설정되었습니다."))
-                                            sender.sendMessage(Component.text("§a추적을 종료하려면 ")
-                                                .append(Component.text("/추적종료")
-                                                    .clickEvent(ClickEvent.runCommand("/추적종료"))
-                                                    .hoverEvent(HoverEvent.showText(Component.text("§7클릭하여 추적을 종료합니다."))))
-                                                .append(Component.text("§a를 입력하세요.")))
-
-                                            BlockEvents.oldLoc[sender.uniqueId] = sender.location
-                                            BlockEvents.oldGameMode[sender.uniqueId] = sender.gameMode
-                                            BlockEvents.trackingPlayer[sender.uniqueId] = playerOffline.uniqueId
-
-                                            sender.gameMode = GameMode.SPECTATOR
-                                            sender.spectatorTarget = playerOnline
-                                            sender.playSound(sender.location, Sound.BLOCK_NOTE_BLOCK_PLING, 1f, 2f)
-                                            sender.closeInventory()
-
-                                            HeartbeatScope().launch {
-                                                val glow = GlowPlayer(playerOnline).apply { addWatcher(sender) }
-                                                while (BlockEvents.tracking[sender.uniqueId] == true) {
-                                                    if (sender.location.distance(playerOnline?.location!!) > Main.conf?.getInt("trackingDistance")!!) {
-                                                        sender.teleport(playerOnline.location)
-                                                    }
-                                                    glow.show()
-                                                    sender.sendActionBar(Component.text("§f${playerOffline.name}님의 위치: X : §c${playerOnline.location.blockX}§f, Y : §c${playerOnline.location.blockY}§f, Z : §c${playerOnline.location.blockZ} §f[거리 : §c${Math.round(sender.location.distance(playerOnline.location))}m§f]"))
-                                                    delay(50L)
-                                                }
-                                                glow.hide()
-                                            }
-                                        } else {
-                                            sender.sendMessage(errorIsOfflinePlayer)
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Block Movement Button
-                            slot(3, 4) {
-                                if (BlockEvents.blocker[playerOffline.uniqueId] == true) {
-                                    item = ItemStack(Material.STRUCTURE_VOID).apply {
-                                        itemMeta = itemMeta.apply {
-                                            displayName(Component.text("§c이동 제한 & 상호작용 제한 §a(설정됨)"))
-                                            lore(listOf(Component.text("§7플레이어의 이동과 상호작용을 제한합니다.")))
-                                            addEnchant(Enchantment.DURABILITY, 1, true)
-                                            addItemFlags(ItemFlag.HIDE_ENCHANTS)
-                                        }
-                                    }
-                                } else {
-                                    item = ItemStack(Material.STRUCTURE_VOID).apply {
-                                        itemMeta = itemMeta.apply {
-                                            displayName(Component.text("§c이동 제한 & 상호작용 제한"))
-                                            lore(listOf(Component.text("§7플레이어의 이동과 상호작용을 제한합니다.")))
-                                        }
-                                    }
-                                }
-
-                                onClick {
-                                    if (isOnline) {
-                                        sender.playSound(sender.location, Sound.BLOCK_NOTE_BLOCK_PLING, 1f, 2f)
-                                        if (BlockEvents.blocker[playerOffline.uniqueId] == true) {
-                                            BlockEvents.blocker[playerOffline.uniqueId] = false
-                                            sender.sendMessage(Component.text("§a${playerOffline.name}님의 이동 제한 상태가 해제되었습니다."))
-                                            sender.openFrame(main(sender, targetUUID)!!)
-                                        } else {
-                                            BlockEvents.blocker[playerOffline.uniqueId] = true
-                                            sender.sendMessage(Component.text("§a${playerOffline.name}님의 이동 제한 상태가 설정되었습니다."))
-                                            sender.openFrame(main(sender, targetUUID)!!)
-                                        }
-                                    } else {
-                                        sender.sendMessage(errorIsOfflinePlayer)
-                                    }
-                                }
-                            }
-
-                            // Inventory See Button
-                            slot(5, 4) {
-                                item = ItemStack(Material.CHEST).apply {
-                                    itemMeta = itemMeta.apply {
-                                        displayName(Component.text("§c인벤토리 열람 §7(미구현)"))
-                                        lore(listOf(Component.text("§7플레이어의 인벤토리를 열람합니다.")))
-                                    }
-                                }
-
-                                onClick {
-                                    // TODO: Inventory
-                                    sender.playSound(sender.location, Sound.BLOCK_NOTE_BLOCK_PLING, 1f, 0.1f)
-                                    sender.sendMessage(Component.text("§c아직 구현되지 않았습니다."))
-                                }
-                            }
-
-                            // EnderChest See Button
-                            slot(7, 4) {
-                                item = ItemStack(Material.ENDER_CHEST).apply {
-                                    itemMeta = itemMeta.apply {
-                                        displayName(Component.text("§c엔더 상자 열람 §7(미구현)"))
-                                        lore(listOf(Component.text("§7플레이어의 엔더 상자를 열람합니다.")))
-                                    }
-                                }
-
-                                onClick {
-                                    // TODO: EnderChest
-                                    sender.playSound(sender.location, Sound.BLOCK_NOTE_BLOCK_PLING, 1f, 0.1f)
-                                    sender.sendMessage(Component.text("§c아직 구현되지 않았습니다."))
-                                }
-                            }
-                            /* Admin Buttons */
-                        }
-                    }
-                } else {
-                    // LiteBan이 비활성화 되어있을 경우
-                    a = frame(6, Component.text("Punishment GUI")) {
-                        isBanned = playerOffline.isBanned
-
-                        // Player Head
-                        slot(4, 0) {
-                            item = ItemStack(Material.PLAYER_HEAD).apply {
-
-                                itemMeta = itemMeta.apply {
-                                    (this as SkullMeta).owningPlayer = playerOffline
-
-                                    if (!isBanned && isOnline) {
-                                        displayName(
-                                            Component.text("${playerOffline.name} [${playerOffline.uniqueId}]")
-                                                .color(TextColor.color(Color.WHITE.asRGB()))
-                                        )
-
-                                    } else if (isBanned) {
-                                        displayName(
-                                            Component.text("${playerOffline.name} [${playerOffline.uniqueId}]")
-                                                .decorate(TextDecoration.STRIKETHROUGH)
-                                                .color(TextColor.color(Color.GRAY.asRGB()))
-                                        )
-
-                                        lore(
-                                            listOf(
-                                                Component.text("§c이미 서버에서 차단된 플레이어입니다.")
-                                            )
-                                        )
-                                    } else {
-                                        displayName(
-                                            Component.text("${playerOffline.name} [${playerOffline.uniqueId}]")
-                                                .color(TextColor.color(Color.GRAY.asRGB()))
-                                        )
-
-                                        lore(
-                                            listOf(
-                                                Component.text("§c오프라인 플레이어입니다.")
-                                            )
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                        /* Admin Buttons */
-                        // Ban / Unban Button
-                        slot(2, 2) {
-                            if (!isBanned) {
-                                item = ItemStack(Material.BARRIER).apply {
-                                    itemMeta = itemMeta.apply {
-                                        displayName(Component.text("§c차단"))
-                                        lore(listOf(Component.text("§7플레이어를 서버에서 차단합니다.")))
-                                    }
-                                }
-
-                                onClick {
-                                    sender.openFrame(template(sender, targetUUID, PunishmentType.BAN, PluginType.VANILLA))
-                                }
-                            } else {
-                                item = ItemStack(Material.BARRIER).apply {
-                                    itemMeta = itemMeta.apply {
-                                        displayName(Component.text("§c차단 해제"))
-                                        lore(listOf(Component.text("§7플레이어의 차단을 해제합니다.")))
-                                        addEnchant(Enchantment.DURABILITY, 1, true)
-                                        addItemFlags(ItemFlag.HIDE_ENCHANTS)
-                                    }
-                                }
-
-                                onClick {
-                                    sender.performCommand("minecraft:pardon ${playerOffline.name}")
-                                    sender.playSound(sender.location, Sound.BLOCK_NOTE_BLOCK_PLING, 1f, 2f)
-                                    sender.sendMessage(Component.text("§a${playerOffline.name}님의 차단이 해제되었습니다."))
-                                    sender.openFrame(main(sender, targetUUID)!!)
-                                }
-                            }
-                        }
-
-                        // Kick Button
-                        slot(6, 2) {
-                            item = ItemStack(Material.IRON_DOOR).apply {
-                                itemMeta = itemMeta.apply {
-                                    displayName(Component.text("§c추방"))
-                                    lore(listOf(Component.text("§7플레이어를 서버에서 추방합니다.")))
-                                }
-                            }
-
-                            onClick {
-                                sender.openFrame(template(sender, targetUUID, PunishmentType.KICK, PluginType.VANILLA))
-                            }
-                        }
-
-                        // Tracking Player Button
-                        slot(1, 4) {
-                            if (BlockEvents.tracking[sender.uniqueId] == true) {
-                                item = ItemStack(Material.COMPASS).apply {
-                                    itemMeta = itemMeta.apply {
-                                        displayName(Component.text("§c플레이어 추적 §a(설정됨)"))
-                                        lore(listOf(Component.text("§7플레이어를 추적합니다.")))
-                                        addEnchant(Enchantment.DURABILITY, 1, true)
-                                        addItemFlags(ItemFlag.HIDE_ENCHANTS)
-                                    }
-                                }
-                            } else {
-                                item = ItemStack(Material.COMPASS).apply {
-                                    itemMeta = itemMeta.apply {
-                                        displayName(Component.text("§c플레이어 추적"))
-                                        lore(listOf(Component.text("§7플레이어를 추적합니다.")))
-                                    }
-                                }
-                            }
-
-                            onClick {
-                                if (BlockEvents.tracking[sender.uniqueId] == true) {
-                                    sender.performCommand("punishment-tracking-end")
-                                } else {
-                                    if (isOnline) {
-                                        BlockEvents.tracking[sender.uniqueId] = true
-                                        sender.sendMessage(Component.text("§a${playerOffline.name}님에 대한 추적이 설정되었습니다."))
-                                        sender.sendMessage(Component.text("§a추적을 종료하려면 ")
-                                            .append(Component.text("/추적종료")
-                                                .clickEvent(ClickEvent.runCommand("/추적종료"))
-                                                .hoverEvent(HoverEvent.showText(Component.text("§7클릭하여 추적을 종료합니다."))))
-                                            .append(Component.text("§a를 입력하세요.")))
-
-                                        BlockEvents.oldLoc[sender.uniqueId] = sender.location
-                                        BlockEvents.oldGameMode[sender.uniqueId] = sender.gameMode
-                                        BlockEvents.trackingPlayer[sender.uniqueId] = playerOffline.uniqueId
-
-                                        sender.gameMode = GameMode.SPECTATOR
-                                        sender.spectatorTarget = playerOnline
-                                        sender.playSound(sender.location, Sound.BLOCK_NOTE_BLOCK_PLING, 1f, 2f)
-                                        sender.closeInventory()
-
-                                        HeartbeatScope().launch {
-                                            val glow = GlowPlayer(playerOnline).apply { addWatcher(sender) }
-                                            while (BlockEvents.tracking[sender.uniqueId] == true) {
-                                                if (sender.location.distance(playerOnline?.location!!) > Main.conf?.getInt("trackingDistance")!!) {
-                                                    sender.teleport(playerOnline.location)
-                                                }
-                                                glow.show()
-                                                sender.sendActionBar(Component.text("§f${playerOffline.name}님의 위치: X : §c${playerOnline.location.blockX}§f, Y : §c${playerOnline.location.blockY}§f, Z : §c${playerOnline.location.blockZ} §f[거리 : §c${Math.round(sender.location.distance(playerOnline.location))}m§f]"))
-                                                delay(50L)
-                                            }
-                                            glow.hide()
-                                        }
-                                    } else {
-                                        sender.sendMessage(errorIsOfflinePlayer)
-                                    }
-                                }
-                            }
-                        }
-
-                        // Block Movement Button
-                        slot(3, 4) {
-                            if (BlockEvents.blocker[playerOffline.uniqueId] == true) {
-                                item = ItemStack(Material.STRUCTURE_VOID).apply {
-                                    itemMeta = itemMeta.apply {
-                                        displayName(Component.text("§c이동 제한 & 상호작용 제한 §a(설정됨)"))
-                                        lore(listOf(Component.text("§7플레이어의 이동과 상호작용을 제한합니다.")))
-                                        addEnchant(Enchantment.DURABILITY, 1, true)
-                                        addItemFlags(ItemFlag.HIDE_ENCHANTS)
-                                    }
-                                }
-                            } else {
-                                item = ItemStack(Material.STRUCTURE_VOID).apply {
-                                    itemMeta = itemMeta.apply {
-                                        displayName(Component.text("§c이동 제한 & 상호작용 제한"))
-                                        lore(listOf(Component.text("§7플레이어의 이동과 상호작용을 제한합니다.")))
-                                    }
-                                }
-                            }
-
-                            onClick {
-                                if (isOnline) {
-                                    sender.playSound(sender.location, Sound.BLOCK_NOTE_BLOCK_PLING, 1f, 2f)
-                                    if (BlockEvents.blocker[playerOffline.uniqueId] == true) {
-                                        BlockEvents.blocker[playerOffline.uniqueId] = false
-                                        sender.sendMessage(Component.text("§a${playerOffline.name}님의 이동 제한 상태가 해제되었습니다."))
-                                        sender.openFrame(main(sender, targetUUID)!!)
-                                    } else {
-                                        BlockEvents.blocker[playerOffline.uniqueId] = true
-                                        sender.sendMessage(Component.text("§a${playerOffline.name}님의 이동 제한 상태가 설정되었습니다."))
-                                        sender.openFrame(main(sender, targetUUID)!!)
-                                    }
-                                } else {
-                                    sender.sendMessage(errorIsOfflinePlayer)
-                                }
-                            }
-                        }
-
-                        // Inventory See Button
-                        slot(5, 4) {
-                            item = ItemStack(Material.CHEST).apply {
-                                itemMeta = itemMeta.apply {
-                                    displayName(Component.text("§c인벤토리 열람 §7(미구현)"))
-                                    lore(listOf(Component.text("§7플레이어의 인벤토리를 열람합니다.")))
-                                }
-                            }
-
-                            onClick {
-                                // TODO: Inventory
-                                sender.playSound(sender.location, Sound.BLOCK_NOTE_BLOCK_PLING, 1f, 0.1f)
-                                sender.sendMessage(Component.text("§c아직 구현되지 않았습니다."))
-                            }
-                        }
-
-                        // EnderChest See Button
-                        slot(7, 4) {
-                            item = ItemStack(Material.ENDER_CHEST).apply {
-                                itemMeta = itemMeta.apply {
-                                    displayName(Component.text("§c엔더 상자 열람 §7(미구현)"))
-                                    lore(listOf(Component.text("§7플레이어의 엔더 상자를 열람합니다.")))
-                                }
-                            }
-
-                            onClick {
-                                // TODO: EnderChest
-                                sender.playSound(sender.location, Sound.BLOCK_NOTE_BLOCK_PLING, 1f, 0.1f)
-                                sender.sendMessage(Component.text("§c아직 구현되지 않았습니다."))
-                            }
-                        }
-                        /* Admin Buttons */
+            if (Main.liteBans_enable) {
+                // LiteBans가 활성화 되어있을 경우
+                liteBansDBUpdate(sender, targetPlayers)?.thenRun {
+                    a = if (targetPlayers.size > 1) {
+                        // 플레이어가 여러명일 경우
+                        MultiplePlayers().liteBans(sender)
+                    } else {
+                        // 플레이어가 한명일 경우
+                        SinglePlayer().liteBans(sender)
                     }
                 }
-                return a
-            } catch (e: IllegalStateException) {
-                sender.sendMessage(errorByServer)
-                e.printStackTrace()
+            } else {
+                data[sender.uniqueId] = mutableListOf(targetPlayers, null, 0)
+
+                a = if (targetPlayers.size > 1) {
+                    // 플레이어가 여러명일 경우
+                    MultiplePlayers().vanilla(sender)
+                } else {
+                    // 플레이어가 한명일 경우
+                    SinglePlayer().vanilla(sender)
+                }
             }
-            return null
-        } else {
-            sender.sendMessage(errorByPlayer)
-            return null
+
+            HeartbeatScope().launch {
+                while (a == null) {
+                    sender.sendActionBar(Component.text("데이터를 가져오는 중..."))
+                    delay(50)
+                }
+
+                if (Main.liteBans_enable) sender.sendActionBar(Component.text("데이터를 가져왔습니다."))
+                sender.openFrame(a!!)
+            }
+        } catch (e: IllegalStateException) {
+            sender.sendMessage(errorByServer)
+            e.printStackTrace()
         }
     }
 
-    private fun template(sender: Player, targetUUID: UUID, punishmentType: PunishmentType, pluginType: PluginType): InvFrame {
+    /**
+     * LiteBans 데이터를 업데이트하는 함수입니다.
+     *
+     * Async로 실행되며, 실행이 완료되면 `data` 변수에 데이터를 저장합니다.
+     *
+     * @param sender 명령어를 실행한 플레이어
+     * @param targetPlayers 명령어를 실행한 플레이어가 선택한 플레이어
+     * @return CompletableFuture<Void>?
+     */
+    fun liteBansDBUpdate(sender: Player, targetPlayers: List<OfflinePlayer>): CompletableFuture<Void>? {
+        if (latestPunishmentData.isNotEmpty() || liteBansDataCollection != null) {
+            latestPunishmentData.clear()
+            liteBansDataCollection = null
+        }
+
+        return CompletableFuture.runAsync {
+            val db = Database.get()
+            val isBanned = targetPlayers.map { db.isPlayerBanned(it.uniqueId, null) }
+            val isMuted = targetPlayers.map { db.isPlayerMuted(it.uniqueId, null) }
+            val bannedCount = targetPlayers.map {
+                var count: Long
+                db.prepareStatement("SELECT COUNT(*) FROM {bans} WHERE uuid=?").apply {
+                    setString(1, it.uniqueId.toString())
+                }.use { statement ->
+                    statement.executeQuery().use { resultSet ->
+                        count = if (resultSet.next()) {
+                            resultSet.getLong(1)
+                        } else {
+                            0
+                        }
+                    }
+                    statement.close()
+                }
+
+                if (count > 0) {
+                    db.prepareStatement("SELECT * FROM {bans} WHERE uuid=? ORDER BY id DESC LIMIT 1").apply {
+                        setString(1, it.uniqueId.toString())
+                    }.use { statement ->
+                        statement.executeQuery().use { resultSet ->
+                            if (resultSet.next()) {
+                                if (latestPunishmentData[it.uniqueId] == null || (latestPunishmentData[it.uniqueId]!![0] as Long) < resultSet.getLong("time")) {
+                                    latestPunishmentData[it.uniqueId] = listOf(
+                                        resultSet.getLong("time"),
+                                        resultSet.getString("reason"),
+                                        "차단",
+                                        resultSet.getLong("until"),
+                                        resultSet.getBoolean("active"),
+                                        resultSet.getString("banned_by_uuid")
+                                    )
+                                }
+                            }
+                        }
+                        statement.close()
+                    }
+                }
+                count
+            }
+            val kickedCount = targetPlayers.map {
+                var count: Long
+                db.prepareStatement("SELECT COUNT(*) FROM {kicks} WHERE uuid=?").apply {
+                    setString(1, it.uniqueId.toString())
+                }.use { statement ->
+                    statement.executeQuery().use { resultSet ->
+                        count = if (resultSet.next()) {
+                            resultSet.getLong(1)
+                        } else {
+                            0
+                        }
+                    }
+                    statement.close()
+                }
+
+                if (count > 0) {
+                    db.prepareStatement("SELECT * FROM {kicks} WHERE uuid=? ORDER BY id DESC LIMIT 1").apply {
+                        setString(1, it.uniqueId.toString())
+                    }.use { statement ->
+                        statement.executeQuery().use { resultSet ->
+                            if (resultSet.next()) {
+                                if (latestPunishmentData[it.uniqueId] == null || (latestPunishmentData[it.uniqueId]!![0] as Long) < resultSet.getLong("time")) {
+                                    latestPunishmentData[it.uniqueId] = listOf(
+                                        resultSet.getLong("time"),
+                                        resultSet.getString("reason"),
+                                        "추방",
+                                        0L,
+                                        false,
+                                        resultSet.getString("banned_by_uuid")
+                                    )
+                                }
+                            }
+                        }
+                        statement.close()
+                    }
+                }
+                count
+            }
+            val mutedCount = targetPlayers.map {
+                var count: Long
+                db.prepareStatement("SELECT COUNT(*) FROM {mutes} WHERE uuid=?").apply {
+                    setString(1, it.uniqueId.toString())
+                }.use { statement ->
+                    statement.executeQuery().use { resultSet ->
+                        count = if (resultSet.next()) {
+                            resultSet.getLong(1)
+                        } else {
+                            0
+                        }
+                    }
+                    statement.close()
+                }
+
+                if (count > 0) {
+                    db.prepareStatement("SELECT * FROM {mutes} WHERE uuid=? ORDER BY id DESC LIMIT 1").apply {
+                        setString(1, it.uniqueId.toString())
+                    }.use { statement ->
+                        statement.executeQuery().use { resultSet ->
+                            if (resultSet.next()) {
+                                if (latestPunishmentData[it.uniqueId] == null || (latestPunishmentData[it.uniqueId]!![0] as Long) < resultSet.getLong("time")) {
+                                    latestPunishmentData[it.uniqueId] = listOf(
+                                        resultSet.getLong("time"),
+                                        resultSet.getString("reason"),
+                                        "채금",
+                                        resultSet.getLong("until"),
+                                        resultSet.getBoolean("active"),
+                                        resultSet.getString("banned_by_uuid")
+                                    )
+                                }
+                            }
+                        }
+                        statement.close()
+                    }
+                }
+                count
+            }
+            val warnedCount = targetPlayers.map {
+                var count: Long
+                db.prepareStatement("SELECT COUNT(*) FROM {warnings} WHERE uuid=?").apply {
+                    setString(1, it.uniqueId.toString())
+                }.use { statement ->
+                    statement.executeQuery().use { resultSet ->
+                        count = if (resultSet.next()) {
+                            resultSet.getLong(1)
+                        } else {
+                            0
+                        }
+                    }
+                    statement.close()
+                }
+
+                if (count > 0) {
+                    db.prepareStatement("SELECT * FROM {warnings} WHERE uuid=? ORDER BY id DESC LIMIT 1").apply {
+                        setString(1, it.uniqueId.toString())
+                    }.use { statement ->
+                        statement.executeQuery().use { resultSet ->
+                            if (resultSet.next()) {
+                                if (latestPunishmentData[it.uniqueId] == null || (latestPunishmentData[it.uniqueId]!![0] as Long) < resultSet.getLong("time")) {
+                                    latestPunishmentData[it.uniqueId] = listOf(
+                                        resultSet.getLong("time"),
+                                        resultSet.getString("reason"),
+                                        "경고",
+                                        resultSet.getLong("until"),
+                                        resultSet.getBoolean("active"),
+                                        resultSet.getString("banned_by_uuid")
+                                    )
+                                }
+                            }
+                        }
+                        statement.close()
+                    }
+                }
+                count
+            }
+
+            liteBansDataCollection = listOf(isBanned, isMuted, bannedCount, kickedCount, mutedCount, warnedCount, latestPunishmentData)
+            data[sender.uniqueId] = mutableListOf(targetPlayers, liteBansDataCollection, 0)
+        }
+    }
+
+    internal fun template(sender: Player, targetUUID: List<UUID>, punishmentType: PunishmentType, pluginType: PluginType): InvFrame {
         val templateKeys = Main.template?.getConfigurationSection("templates")?.getKeys(false)?.toList()
 
         return frame((templateKeys?.size?.div(9) ?: 0) + 1, Component.text("Select Punishment Template")) {
@@ -735,7 +329,7 @@ class PunishmentGUI {
         }
     }
 
-    private fun duration(sender: Player, targetUUID: UUID, punishmentType: PunishmentType, pluginType: PluginType, template: String): InvFrame? {
+    private fun duration(sender: Player, targetUUID: List<UUID>, punishmentType: PunishmentType, pluginType: PluginType, template: String): InvFrame? {
         when (pluginType) {
             PluginType.VANILLA -> {
                 punishment(sender, targetUUID, punishmentType, pluginType, template, null)
@@ -769,43 +363,78 @@ class PunishmentGUI {
         return null
     }
 
-    private fun punishment(sender: Player, targetUUID: UUID, punishmentType: PunishmentType, pluginType: PluginType, template: String, punishmentDuration: String?) {
-        val playerOffline = Bukkit.getOfflinePlayer(targetUUID)
+    private fun punishment(sender: Player, targetUUID: List<UUID>, punishmentType: PunishmentType, pluginType: PluginType, template: String, punishmentDuration: String?) {
+        val playerOfflineList: List<OfflinePlayer> = targetUUID.map { sender.server.getOfflinePlayer(it) }
 
         val reason = Main.template?.getString("templates.$template.Reason")?.replace("&", "§")
-        val duration = if (punishmentDuration != null) Main.template?.getInt("durations.$punishmentDuration") else -1
+        val duration = if (punishmentDuration != null) Main.template?.getInt("durations.$punishmentDuration.time") else -1
 
         sender.closeInventory()
 
-        when (pluginType) {
-            PluginType.LITEBANS -> {
-                when (punishmentType) {
-                    PunishmentType.BAN -> TODO()
-                    PunishmentType.KICK -> TODO()
-                    PunishmentType.MUTE -> TODO()
-                    PunishmentType.WARN -> TODO()
-                }
-            }
+        playerOfflineList.forEach {
+            val isOnline = it.isOnline
 
-            PluginType.VANILLA -> {
-                when (punishmentType) {
-                    PunishmentType.BAN -> {
-                        sender.performCommand("minecraft:ban ${playerOffline.name} $reason")
-                        sender.sendMessage(Component.text("§a${playerOffline.name}님을 서버에서 차단하였습니다."))
+            when (pluginType) {
+                PluginType.LITEBANS -> {
+                    val flags = "-S --sender-uuid=${sender.uniqueId} --sender=${sender.name}"
+
+                    when(punishmentType) {
+                        PunishmentType.BAN -> {
+                            if (duration == -1) {
+                                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "litebans:ban ${it.name} $reason $flags")
+                                sender.sendMessage(Component.text("§a${it.name}님을 서버에서 차단하였습니다."))
+                            } else {
+                                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "litebans:tempban ${it.name} $reason ${duration}m $flags")
+                                sender.sendMessage(Component.text("§a${it.name}님을 서버에서 ${duration}분 동안 차단하였습니다."))
+                            }
+                        }
+                        PunishmentType.KICK -> {
+                            if (isOnline) {
+                                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "litebans:kick ${it.name} $reason $flags")
+                                sender.sendMessage(Component.text("§a${it.name}님을 서버에서 추방하였습니다."))
+                            } else {
+                                sender.sendMessage(errorIsOfflinePlayer)
+                            }
+                        }
+                        PunishmentType.MUTE -> {
+                            if (duration == -1) {
+                                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "litebans:mute ${it.name} $reason $flags")
+                                sender.sendMessage(Component.text("§a${it.name}님을 서버에서 채팅 금지하였습니다."))
+                            } else {
+                                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "litebans:tempmute ${it.name} $reason ${duration}m $flags")
+                                sender.sendMessage(Component.text("§a${it.name}님을 서버에서 ${duration}분 동안 채팅 금지하였습니다."))
+                            }
+                        }
+                        PunishmentType.WARN -> {
+                            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "litebans:warn ${it.name} $reason $flags")
+                            sender.sendMessage(Component.text("§a${it.name}님에게 경고를 하였습니다."))
+                        }
                     }
+                }
+                PluginType.VANILLA -> {
+                    val worlds = Bukkit.getWorlds()
+                    val currentFeedback = worlds.map { world -> world.getGameRuleValue(GameRule.SEND_COMMAND_FEEDBACK) }
+                    worlds.forEach { world -> world.setGameRule(GameRule.SEND_COMMAND_FEEDBACK, false) }
 
-                    PunishmentType.KICK -> {
-                        if (playerOffline.isOnline) {
-                            sender.performCommand("minecraft:kick ${playerOffline.name} $reason")
-                            sender.sendMessage(Component.text("§a${playerOffline.name}님을 서버에서 추방하였습니다."))
-                        } else {
-                            sender.sendMessage(errorIsOfflinePlayer)
+                    when(punishmentType) {
+                        PunishmentType.BAN -> {
+                            sender.performCommand("minecraft:ban ${it.name} $reason")
+                            sender.sendMessage(Component.text("§a${it.name}님을 서버에서 차단하였습니다."))
+                        }
+                        PunishmentType.KICK -> {
+                            if (isOnline) {
+                                sender.performCommand("minecraft:kick ${it.name} $reason")
+                                sender.sendMessage(Component.text("§a${it.name}님을 서버에서 추방하였습니다."))
+                            } else {
+                                sender.sendMessage(errorIsOfflinePlayer)
+                            }
+                        }
+                        else -> {
+                            sender.sendMessage(Component.text("§c해당 기능은 'LiteBans' 플러그인이 있을 때만 사용할 수 있습니다."))
                         }
                     }
 
-                    else -> {
-                        sender.sendMessage(Component.text("§c해당 기능은 'LiteBans' 플러그인이 있을 때만 사용할 수 있습니다."))
-                    }
+                    worlds.forEachIndexed { index, world -> world.setGameRule(GameRule.SEND_COMMAND_FEEDBACK, currentFeedback[index]!!) }
                 }
             }
         }

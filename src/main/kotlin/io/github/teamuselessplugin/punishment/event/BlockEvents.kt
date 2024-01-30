@@ -1,7 +1,6 @@
-package io.github.teamuselessplugin.punishment.events
+package io.github.teamuselessplugin.punishment.event
 
 import net.kyori.adventure.text.Component
-import org.bukkit.GameMode
 import org.bukkit.Location
 import org.bukkit.Material
 import org.bukkit.entity.Player
@@ -18,13 +17,8 @@ import org.bukkit.event.player.PlayerMoveEvent
 import java.util.*
 import kotlin.collections.HashMap
 
-class BlockEvents : Listener {
+internal class BlockEvents : Listener {
     companion object {
-        val tracking: HashMap<UUID, Boolean> = HashMap()
-        val trackingPlayer: HashMap<UUID, UUID> = HashMap()
-        val oldLoc: HashMap<UUID, Location> = HashMap()
-        val oldGameMode: HashMap<UUID, GameMode> = HashMap()
-
         val blocker: HashMap<UUID, Boolean> = HashMap()
     }
     @EventHandler
@@ -94,12 +88,4 @@ class BlockEvents : Listener {
             e.whoClicked.sendActionBar(Component.text("§c관리자에 의해 인벤토리 사용이 제한되었습니다."))
         }
     }
-
-//    @EventHandler
-//    fun chat(e : AsyncChatEvent) {
-//        if (limit[e.player.uniqueId] == true) {
-//            e.isCancelled = true
-//            e.player.sendMessage(Component.text("§c관리자에 의해 채팅이 제한되었습니다."))
-//        }
-//    }
 }

@@ -37,3 +37,6 @@
 > 5. heartbeat-coroutines - `GPL-3.0 License`
 >    * https://github.com/monun/heartbeat-coroutines
 >    * https://github.com/monun/heartbeat-coroutines/blob/master/LICENSE.md
+> 6. ClassGraph - `MIT License`
+>    * https://github.com/classgraph/classgraph
+>    * https://github.com/classgraph/classgraph/blob/latest/LICENSE-ClassGraph.txt

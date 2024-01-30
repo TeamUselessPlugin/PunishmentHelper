@@ -13,73 +13,129 @@ import org.bukkit.entity.Player
 import org.bukkit.potion.PotionEffectType
 import kotlin.experimental.and
 
-class GlowPlayer(private var target: Player? = null) {
+internal class GlowPlayer(private var target: Player? = null) {
     private val watchers = mutableListOf<Player>()
     private var protocolListener: PacketAdapter? = null
 
+    /**
+     * 강조 효과가 활성화되어 있는지 여부를 반환합니다.
+     *
+     * @return 활성화 여부
+     */
+    val isEnabled: Boolean
+        get() = protocolListener != null
+
+    /**
+     * 지정된 플레이어의 강조 효과를 활성화 합니다.
+     *
+     * @return 성공 여부
+     */
     fun show(): Boolean {
-        if (protocolListener == null) {
-            val packet = PacketContainer(PacketType.Play.Server.ENTITY_METADATA)
-            packet.integers.write(0, target?.entityId)
-            val serializer = WrappedDataWatcher.Registry.get(Byte::class.javaObjectType)
-
-            val value = WrappedDataValue(0, serializer, 0x40.toByte())
-            packet.dataValueCollectionModifier.write(0, listOf(value))
-
-            try {
-                watchers.forEach {
-                    ProtocolLibrary.getProtocolManager().sendServerPacket(it, packet)
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-                return false
-            }
-            init()
-            return true
+        // 이미 강조 효과가 활성화된 상태거나 플레이어가 지정되지 않은 경우 false를 반환
+        if (isEnabled) {
+            return false
         }
-        return false
+
+        return init()
     }
 
+
+    /**
+     * 강조된 플레이어의 강조 효과를 해제합니다.
+     *
+     * @return 성공 여부
+     */
     fun hide(): Boolean {
-        if (protocolListener != null) {
-            destroy()
-
-            // glowing effect가 없는 경우에만 packet을 보냄
-            if (!target?.hasPotionEffect(PotionEffectType.GLOWING)!!) {
-                val packet = PacketContainer(PacketType.Play.Server.ENTITY_METADATA)
-                packet.integers.write(0, target?.entityId)
-                val serializer = WrappedDataWatcher.Registry.get(Byte::class.javaObjectType)
-
-                val value = WrappedDataValue(0, serializer, 0.toByte())
-                packet.dataValueCollectionModifier.write(0, listOf(value))
-
-                try {
-                    watchers.forEach {
-                        ProtocolLibrary.getProtocolManager().sendServerPacket(it, packet)
-                    }
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    return false
-                }
-            }
-            return true
+        // 이미 강조 효과가 비활성화된 상태거나 플레이어가 지정되지 않은 경우 false를 반환
+        if (!isEnabled) {
+            return false
         }
-        return false
+
+        return destroy()
     }
 
-    fun addWatcher(player: Player) {
+    /**
+     * 강조된 플레이어를 볼수 있는 플레이어를 추가합니다.
+     *
+     * @param player 플레이어
+     * @return 성공 여부
+     */
+    fun addWatcher(player: Player): Boolean {
+        // 버려진 Player 객체를 제거합니다.
+        watchers.removeIf { it.uniqueId == player.uniqueId && it != player }
+
+        // 플레이어가 추가된 상태일 경우
+        if (watchers.contains(player)) {
+            return false
+        }
+
         watchers.add(player)
+
+        // 강조 효과가 활성화된 상태일 때
+        if (isEnabled) {
+            packetSend(0x40.toByte(), mWatcher = listOf(player))
+        }
+        return true
     }
 
-    fun removeWatcher(player: Player) {
+    /**
+     * 강조된 플레이어를 볼수 있는 플레이어를 제거합니다.
+     *
+     * @param player 플레이어
+     * @return 성공 여부
+     */
+    fun removeWatcher(player: Player): Boolean {
+        // 플레이어가 추가되지 않은 상태일 경우
+        if (!watchers.contains(player)) {
+            return false
+        }
+
         watchers.remove(player)
+
+        // 강조 효과가 활성화된 상태일 때
+        if (isEnabled) {
+            packetSend(0x00.toByte(), mWatcher = listOf(player))
+        }
+        return true
     }
 
-    fun setTarget(target: Player?) {
+    /**
+     * 강조 효과를 적용할 플레이어를 설정합니다.
+     *
+     * @param target 플레이어
+     * @return 성공 여부
+     */
+    fun setTarget(target: Player?): Boolean {
+        val oldTarget = this.target
         this.target = target
+
+        // 강조 효과가 활성화된 상태일 때
+        if (isEnabled) {
+            packetSend(0x00.toByte(), mTarget = oldTarget)
+            packetSend(0x40.toByte(), mTarget = target)
+        }
+        return true
     }
 
-    private fun init() {
+    /**
+     * 강조 효과를 적용할 플레이어를 반환합니다.
+     *
+     * @return 플레이어
+     */
+    fun getTarget(): Player? {
+        return target
+    }
+
+    /**
+     * 강조된 플레이어를 볼수 있는 플레이어 목록을 반환합니다.
+     *
+     * @return 플레이어 목록
+     */
+    fun getWatchers(): List<Player> {
+        return watchers
+    }
+
+    private fun init(): Boolean {
         protocolListener = object : PacketAdapter(
             params()
                 .plugin(Main.instance!!)
@@ -92,7 +148,7 @@ class GlowPlayer(private var target: Player? = null) {
                 val packet = event.packet.deepClone()
                 var indexZero = 0
 
-                if (watchers.contains(event.player) && event.packet.integers.read(0) == target?.entityId) {
+                if (watchers.contains(event.player) && event.packet.integers.read(0) == target?.entityId!!) {
                     val values = mutableListOf<WrappedDataValue>()
                     packet.dataValueCollectionModifier.read(0).forEach {
                         if (it.index == 0 && (it.value as Byte).and(0x40.toByte()) == 0x00.toByte()) {
@@ -134,10 +190,39 @@ class GlowPlayer(private var target: Player? = null) {
         }
 
         ProtocolLibrary.getProtocolManager().addPacketListener(protocolListener)
+        return packetSend(0x40.toByte())
     }
-
-    private fun destroy() {
+    private fun destroy(): Boolean {
         ProtocolLibrary.getProtocolManager().removePacketListener(protocolListener)
         protocolListener = null
+
+        // glowing effect가 없는 경우에만 packet을 보냄
+        if (!target?.hasPotionEffect(PotionEffectType.GLOWING)!!) {
+            return packetSend(0x00.toByte())
+        }
+        return true
+    }
+    private fun packetSend(packet: Byte, mTarget: Player? = target, mWatcher: List<Player> = watchers): Boolean {
+        if (mTarget == null || mWatcher.isEmpty()) {
+            return false
+        }
+
+        PacketContainer(PacketType.Play.Server.ENTITY_METADATA).let {
+            it.integers.write(0, mTarget.entityId)
+            val serializer = WrappedDataWatcher.Registry.get(Byte::class.javaObjectType)
+
+            val value = WrappedDataValue(0, serializer, packet)
+            it.dataValueCollectionModifier.write(0, listOf(value))
+
+            try {
+                mWatcher.forEach { player ->
+                    ProtocolLibrary.getProtocolManager().sendServerPacket(player, it)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                return false
+            }
+            return true
+        }
     }
 }
